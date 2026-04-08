@@ -3,12 +3,12 @@
 import { useState, useEffect } from 'react'
 import {
   FlashcardData,
-  FlashcardFormData,
   EMPTY_FORM,
   WORD_TYPES,
   flashcardToForm,
   DeckData,
 } from './types'
+import { createFlashcard, updateFlashcard } from '@/lib/firestore'
 import { FlashcardPreview } from './flashcard-preview'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -58,7 +58,7 @@ export function AddEditTab({
   onClearEditing,
   onSaved,
 }: AddEditTabProps) {
-  const [formData, setFormData] = useState<FlashcardFormData>({
+  const [formData, setFormData] = useState({
     ...EMPTY_FORM,
     deckId: defaultDeckId || '',
   })
@@ -73,7 +73,7 @@ export function AddEditTab({
     }
   }, [editingCard, defaultDeckId])
 
-  const updateField = (field: keyof FlashcardFormData, value: string) => {
+  const updateField = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
@@ -103,26 +103,22 @@ export function AddEditTab({
 
     setIsSaving(true)
     try {
-      const url = editingCard ? `/api/flashcards/${editingCard.id}` : '/api/flashcards'
-      const method = editingCard ? 'PUT' : 'POST'
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      })
-
-      if (res.ok) {
+      if (editingCard) {
+        await updateFlashcard(editingCard.id, formData)
         toast({
-          title: editingCard ? 'Đã cập nhật' : 'Đã tạo',
-          description: editingCard
-            ? `Thẻ "${formData.vocabulary}" đã được cập nhật.`
-            : `Thẻ "${formData.vocabulary}" đã được tạo thành công.`,
+          title: 'Đã cập nhật',
+          description: `Thẻ "${formData.vocabulary}" đã được cập nhật.`,
+        })
+        onSaved()
+        onClearEditing()
+      } else {
+        await createFlashcard(formData)
+        toast({
+          title: 'Đã tạo',
+          description: `Thẻ "${formData.vocabulary}" đã được tạo thành công.`,
         })
         setFormData({ ...EMPTY_FORM, deckId: defaultDeckId || '' })
         onSaved()
-        if (editingCard) onClearEditing()
-      } else {
-        toast({ title: 'Lỗi', description: 'Không thể lưu thẻ.', variant: 'destructive' })
       }
     } catch {
       toast({ title: 'Lỗi', description: 'Có lỗi xảy ra.', variant: 'destructive' })

@@ -10,6 +10,7 @@ import { AddEditTab } from '@/components/flashcards/add-edit-tab'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet'
 import { useTTS } from '@/hooks/use-tts'
+import { subscribeDecks, subscribeFlashcards, seedData as seedFirestoreData } from '@/lib/firestore'
 import {
   Plus,
   Menu,
@@ -33,66 +34,43 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { speak, isSpeaking } = useTTS()
-  const decksRef = useRef<DeckData[]>(decks)
-  decksRef.current = decks
+  const seededRef = useRef(false)
 
-  // Seed + Fetch data
-  const seedData = useCallback(async () => {
-    try {
-      await fetch('/api/flashcards/seed', { method: 'POST' })
-    } catch {
-      // ignore
-    }
-  }, [])
-
-  const fetchDecks = useCallback(async () => {
-    try {
-      const res = await fetch('/api/decks')
-      if (res.ok) {
-        const data = await res.json()
-        setDecks(data)
-      }
-    } catch {
-      // ignore
-    }
-  }, [])
-
-  const fetchCards = useCallback(async () => {
-    try {
-      const params = new URLSearchParams()
-      if (selectedDeckId) {
-        params.set('deckId', selectedDeckId)
-        // Include children cards when parent is selected
-        const isParent = decksRef.current.some((d) => d.id === selectedDeckId && d.children && d.children.length > 0)
-        if (isParent) params.set('includeChildren', 'true')
-      }
-      const url = `/api/flashcards${params.toString() ? `?${params.toString()}` : ''}`
-      const res = await fetch(url)
-      if (res.ok) {
-        const data = await res.json()
-        setCards(data)
-      }
-    } catch {
-      // ignore
-    } finally {
-      setIsLoading(false)
-    }
-  }, [selectedDeckId])
-
-  const refreshAll = useCallback(() => {
-    fetchDecks()
-    fetchCards()
-  }, [fetchDecks, fetchCards])
-
+  // Seed data on first load
   useEffect(() => {
-    seedData().then(() => {
-      fetchDecks().then(() => fetchCards())
+    if (seededRef.current) return
+    seededRef.current = true
+    seedFirestoreData().catch(() => {
+      // ignore seed errors
     })
   }, [])
 
+  // Subscribe to decks realtime
   useEffect(() => {
-    fetchCards()
-  }, [selectedDeckId, fetchCards])
+    let unsub: (() => void) | undefined
+    subscribeDecks((updatedDecks) => {
+      setDecks(updatedDecks)
+    }).then((fn) => {
+      unsub = fn
+    })
+    return () => {
+      if (unsub) unsub()
+    }
+  }, [])
+
+  // Subscribe to flashcards realtime
+  useEffect(() => {
+    let unsub: (() => void) | undefined
+    subscribeFlashcards(selectedDeckId, (updatedCards) => {
+      setCards(updatedCards)
+      setIsLoading(false)
+    }).then((fn) => {
+      unsub = fn
+    })
+    return () => {
+      if (unsub) unsub()
+    }
+  }, [selectedDeckId])
 
   // Handlers
   const handleEdit = (card: FlashcardData) => {
@@ -106,7 +84,6 @@ export default function Home() {
   }
 
   const handleSaved = () => {
-    refreshAll()
     if (!editingCard) {
       setViewMode('browse')
     }
@@ -118,7 +95,6 @@ export default function Home() {
   }
 
   const handleStudyComplete = () => {
-    refreshAll()
     setViewMode('browse')
   }
 
@@ -132,6 +108,10 @@ export default function Home() {
     setViewMode('browse')
     setSidebarOpen(false)
   }
+
+  const handleRefresh = useCallback(() => {
+    // Realtime handles refresh automatically, no-op
+  }, [])
 
   const selectedDeckName = selectedDeckId
     ? (() => {
@@ -165,7 +145,7 @@ export default function Home() {
                 decks={decks}
                 selectedDeckId={selectedDeckId}
                 onSelectDeck={handleSelectDeck}
-                onRefresh={refreshAll}
+                onRefresh={handleRefresh}
               />
             </SheetContent>
           </Sheet>
@@ -230,7 +210,7 @@ export default function Home() {
             decks={decks}
             selectedDeckId={selectedDeckId}
             onSelectDeck={handleSelectDeck}
-            onRefresh={refreshAll}
+            onRefresh={handleRefresh}
           />
         </aside>
 
@@ -286,7 +266,7 @@ export default function Home() {
                       onStartStudy={handleStartStudy}
                       onSpeak={speak}
                       isSpeaking={isSpeaking}
-                      onRefresh={refreshAll}
+                      onRefresh={handleRefresh}
                       deckId={selectedDeckId}
                     />
                   )}

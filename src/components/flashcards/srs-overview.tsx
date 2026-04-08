@@ -1,6 +1,6 @@
 'use client'
 
-import { FlashcardData, SRS_LEVELS } from './types'
+import { FlashcardData, SRS_LEVELS, toDate } from './types'
 import { Card, CardContent } from '@/components/ui/card'
 import { Flame, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -11,6 +11,7 @@ interface SRSOverviewProps {
 
 export function SRSOverview({ cards }: SRSOverviewProps) {
   const now = new Date()
+  const nowMs = now.getTime()
   const totalCards = cards.length
 
   // Count cards per level
@@ -20,7 +21,10 @@ export function SRSOverview({ cards }: SRSOverviewProps) {
   }))
 
   // Count due cards
-  const dueCards = cards.filter((c) => new Date(c.nextReview) <= now)
+  const dueCards = cards.filter((c) => {
+    const nextReviewDate = toDate(c.nextReview)
+    return nextReviewDate ? nextReviewDate.getTime() <= nowMs : false
+  })
   const dueCount = dueCards.length
 
   // Calculate percentage for each level for the bar

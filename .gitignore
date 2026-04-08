@@ -70,4 +70,4 @@ worklog.md
 
 # IDE
 .vscode/
-.idea/
+.idea/.env.local

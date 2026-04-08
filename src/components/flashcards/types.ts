@@ -1,47 +1,21 @@
-// Deck types
-export interface DeckData {
-  id: string
+// Re-export types from firestore module
+export type {
+  DeckData,
+  FlashcardData,
+  DeckFormData,
+  FlashcardFormData,
+} from '@/lib/firestore'
+export { toDate, toDateOrNow } from '@/lib/firestore'
+
+import type { DeckData, FlashcardData, FlashcardFormData } from '@/lib/firestore'
+
+export interface DeckFormDataLocal {
   name: string
   parentId: string | null
-  order: number
-  totalCount: number
-  createdAt: string
-  updatedAt: string
-  children?: DeckData[]
-  _count?: { flashcards: number }
 }
 
-export interface DeckFormData {
-  name: string
-  parentId: string | null
-}
-
-// Flashcard types with SRS fields
-export interface FlashcardData {
-  id: string
-  vocabulary: string
-  ipa: string
-  wordType: string
-  meaning: string
-  example1: string | null
-  example1Image: string | null
-  example2: string | null
-  example2Image: string | null
-  // SRS fields
-  srsLevel: number
-  easeFactor: number
-  interval: number
-  nextReview: string
-  reviewCount: number
-  lastReview: string | null
-  // Relations
-  deckId: string
-  deck: { id: string; name: string }
-  createdAt: string
-  updatedAt: string
-}
-
-export interface FlashcardFormData {
+// Flashcard form data for add/edit
+export interface FlashcardFormDataLocal {
   vocabulary: string
   ipa: string
   wordType: string
@@ -53,7 +27,7 @@ export interface FlashcardFormData {
   deckId: string
 }
 
-export const EMPTY_FORM: FlashcardFormData = {
+export const EMPTY_FORM: FlashcardFormDataLocal = {
   vocabulary: '',
   ipa: '',
   wordType: 'Noun',
@@ -76,7 +50,7 @@ export const WORD_TYPES = [
   'Interjection',
 ]
 
-export function flashcardToForm(card: FlashcardData): FlashcardFormData {
+export function flashcardToForm(card: FlashcardData): FlashcardFormDataLocal {
   return {
     vocabulary: card.vocabulary,
     ipa: card.ipa,

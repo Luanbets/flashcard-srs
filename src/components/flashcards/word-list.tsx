@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { FlashcardData, getSRSLevelConfig, SRS_LEVELS } from './types'
+import { FlashcardData, getSRSLevelConfig, SRS_LEVELS, toDate } from './types'
+import { deleteFlashcard as deleteFlashcardFirestore } from '@/lib/firestore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -57,8 +58,14 @@ export function WordList({
 
   const now = new Date()
   const dueCards = useMemo(
-    () => cards.filter((c) => new Date(c.nextReview) <= now),
-    [cards]
+    () => {
+      const nowMs = now.getTime()
+      return cards.filter((c) => {
+        const nextReviewDate = toDate(c.nextReview)
+        return nextReviewDate ? nextReviewDate.getTime() <= nowMs : false
+      })
+    },
+    [cards, now]
   )
 
   const filteredCards = useMemo(() => {
@@ -83,11 +90,8 @@ export function WordList({
     if (!deleteTarget) return
     setIsDeleting(true)
     try {
-      const res = await fetch(`/api/flashcards/${deleteTarget.id}`, { method: 'DELETE' })
-      if (res.ok) {
-        toast({ title: 'Đã xóa', description: `Đã xóa "${deleteTarget.vocabulary}".` })
-        onRefresh()
-      }
+      await deleteFlashcardFirestore(deleteTarget.id)
+      toast({ title: 'Đã xóa', description: `Đã xóa "${deleteTarget.vocabulary}".` })
     } catch {
       toast({ title: 'Lỗi', variant: 'destructive' })
     } finally {
@@ -165,7 +169,8 @@ export function WordList({
           <div className="divide-y divide-border/30">
             {filteredCards.map((card) => {
               const config = getSRSLevelConfig(card.srsLevel)
-              const isDue = new Date(card.nextReview) <= now
+              const nextReviewDate = toDate(card.nextReview)
+              const isDue = nextReviewDate ? nextReviewDate.getTime() <= now.getTime() : false
               return (
                 <motion.div
                   key={card.id}

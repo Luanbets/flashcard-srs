@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { FlashcardData, ReviewRating, RATING_CONFIG, getSRSLevelConfig } from './types'
+import { reviewFlashcard } from '@/lib/firestore'
 import { FlashcardFlipCard } from './flashcard-flip-card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -68,37 +69,29 @@ export function StudyMode({
       setIsSubmitting(true)
 
       try {
-        const res = await fetch(`/api/flashcards/${currentCard.id}/review`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ rating }),
-        })
+        const result = await reviewFlashcard(currentCard.id, rating)
+        setReviewedCards((prev) => [
+          ...prev,
+          {
+            cardId: currentCard.id,
+            rating,
+            previousLevel: result.previousLevel,
+            newLevel: result.newLevel,
+          },
+        ])
 
-        if (res.ok) {
-          const data = await res.json()
-          setReviewedCards((prev) => [
-            ...prev,
-            {
-              cardId: currentCard.id,
-              rating,
-              previousLevel: data.changes.previousLevel,
-              newLevel: data.changes.newLevel,
-            },
-          ])
+        // Show level change animation
+        if (result.newLevel > result.previousLevel) {
+          setLevelUpAnimation(currentCard.id)
+          setTimeout(() => setLevelUpAnimation(null), 800)
+        }
 
-          // Show level change animation
-          if (data.changes.newLevel > data.changes.previousLevel) {
-            setLevelUpAnimation(currentCard.id)
-            setTimeout(() => setLevelUpAnimation(null), 800)
-          }
-
-          // Move to next card
-          if (currentIndex < cards.length - 1) {
-            setCurrentIndex((prev) => prev + 1)
-            setIsFlipped(false)
-          } else {
-            setIsComplete(true)
-          }
+        // Move to next card
+        if (currentIndex < cards.length - 1) {
+          setCurrentIndex((prev) => prev + 1)
+          setIsFlipped(false)
+        } else {
+          setIsComplete(true)
         }
       } catch {
         // Error handling silent

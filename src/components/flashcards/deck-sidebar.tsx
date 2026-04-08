@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { DeckData } from './types'
+import { createDeck as createDeckFirestore, updateDeck as updateDeckFirestore, deleteDeck as deleteDeckFirestore } from '@/lib/firestore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -88,45 +89,31 @@ export function DeckSidebar({
     if (!editingDeckId || !editName.trim()) return
     setIsSaving(true)
     try {
-      const res = await fetch(`/api/decks/${editingDeckId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editName.trim() }),
-      })
-      if (res.ok) {
-        toast({ title: 'Đã cập nhật', description: `Đã đổi tên bộ từ.` })
-        setEditingDeckId(null)
-        onRefresh()
-      }
+      await updateDeckFirestore(editingDeckId, { name: editName.trim() })
+      toast({ title: 'Đã cập nhật', description: `Đã đổi tên bộ từ.` })
+      setEditingDeckId(null)
     } catch {
       toast({ title: 'Lỗi', description: 'Không thể cập nhật.', variant: 'destructive' })
     } finally {
       setIsSaving(false)
     }
-  }, [editingDeckId, editName, toast, onRefresh])
+  }, [editingDeckId, editName, toast])
 
-  const createDeck = useCallback(
+  const createDeckFn = useCallback(
     async (name: string, parentId: string | null) => {
       if (!name.trim()) return
       setIsSaving(true)
       try {
-        const res = await fetch('/api/decks', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: name.trim(), parentId }),
+        await createDeckFirestore({ name: name.trim(), parentId })
+        toast({
+          title: 'Đã tạo',
+          description: `Bộ từ "${name.trim()}" đã được tạo.`,
         })
-        if (res.ok) {
-          toast({
-            title: 'Đã tạo',
-            description: `Bộ từ "${name.trim()}" đã được tạo.`,
-          })
-          setCreatingParent(false)
-          setCreatingChildFor(null)
-          setNewDeckName('')
-          if (parentId) {
-            setExpandedParents((prev) => new Set(prev).add(parentId))
-          }
-          onRefresh()
+        setCreatingParent(false)
+        setCreatingChildFor(null)
+        setNewDeckName('')
+        if (parentId) {
+          setExpandedParents((prev) => new Set(prev).add(parentId))
         }
       } catch {
         toast({ title: 'Lỗi', description: 'Không thể tạo bộ từ.', variant: 'destructive' })
@@ -134,29 +121,26 @@ export function DeckSidebar({
         setIsSaving(false)
       }
     },
-    [toast, onRefresh]
+    [toast]
   )
 
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return
     setIsDeleting(true)
     try {
-      const res = await fetch(`/api/decks/${deleteTarget.id}`, { method: 'DELETE' })
-      if (res.ok) {
-        toast({
-          title: 'Đã xóa',
-          description: `Bộ từ "${deleteTarget.name}" đã bị xóa.`,
-        })
-        if (selectedDeckId === deleteTarget.id) onSelectDeck(null)
-        onRefresh()
-      }
+      await deleteDeckFirestore(deleteTarget.id)
+      toast({
+        title: 'Đã xóa',
+        description: `Bộ từ "${deleteTarget.name}" đã bị xóa.`,
+      })
+      if (selectedDeckId === deleteTarget.id) onSelectDeck(null)
     } catch {
       toast({ title: 'Lỗi', variant: 'destructive' })
     } finally {
       setIsDeleting(false)
       setDeleteTarget(null)
     }
-  }, [deleteTarget, selectedDeckId, onSelectDeck, onRefresh, toast])
+  }, [deleteTarget, selectedDeckId, onSelectDeck, toast])
 
   return (
     <>
@@ -285,7 +269,7 @@ export function DeckSidebar({
                       className="h-7 text-sm"
                       autoFocus
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') createDeck(newDeckName, parent.id)
+                        if (e.key === 'Enter') createDeckFn(newDeckName, parent.id)
                         if (e.key === 'Escape') setCreatingChildFor(null)
                       }}
                     />
@@ -293,7 +277,7 @@ export function DeckSidebar({
                       size="icon"
                       variant="ghost"
                       className="h-7 w-7"
-                      onClick={() => createDeck(newDeckName, parent.id)}
+                      onClick={() => createDeckFn(newDeckName, parent.id)}
                     >
                       <Check className="h-3.5 w-3.5" />
                     </Button>
@@ -395,7 +379,7 @@ export function DeckSidebar({
                   className="h-7 text-sm"
                   autoFocus
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') createDeck(newDeckName, null)
+                    if (e.key === 'Enter') createDeckFn(newDeckName, null)
                     if (e.key === 'Escape') setCreatingParent(false)
                   }}
                 />
@@ -403,7 +387,7 @@ export function DeckSidebar({
                   size="icon"
                   variant="ghost"
                   className="h-7 w-7"
-                  onClick={() => createDeck(newDeckName, null)}
+                  onClick={() => createDeckFn(newDeckName, null)}
                 >
                   <Check className="h-3.5 w-3.5" />
                 </Button>
