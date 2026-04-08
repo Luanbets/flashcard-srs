@@ -102,7 +102,7 @@ export function DeckSidebar({
 
   const createDeckFn = useCallback(
     async (name: string, parentId: string | null) => {
-      if (!name.trim()) return
+      if (!name.trim() || isSaving) return
       setIsSaving(true)
       try {
         await createDeckFirestore({ name: name.trim(), parentId })
@@ -156,6 +156,7 @@ export function DeckSidebar({
             size="icon"
             className="h-7 w-7 text-muted-foreground/60 hover:text-foreground hover:bg-white/5"
             onClick={() => setCreatingParent(true)}
+            disabled={isSaving}
           >
             <Plus className="h-4 w-4" />
           </Button>
@@ -278,14 +279,16 @@ export function DeckSidebar({
                       size="icon"
                       variant="ghost"
                       className="h-7 w-7 text-emerald-400 hover:bg-emerald-500/10"
+                      disabled={isSaving || !newDeckName.trim()}
                       onClick={() => createDeckFn(newDeckName, parent.id)}
                     >
-                      <Check className="h-3.5 w-3.5" />
+                      {isSaving ? <div className="h-3 w-3 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent" /> : <Check className="h-3.5 w-3.5" />}
                     </Button>
                     <Button
                       size="icon"
                       variant="ghost"
                       className="h-7 w-7 text-muted-foreground/60"
+                      disabled={isSaving}
                       onClick={() => setCreatingChildFor(null)}
                     >
                       <X className="h-3.5 w-3.5" />
@@ -388,14 +391,16 @@ export function DeckSidebar({
                   size="icon"
                   variant="ghost"
                   className="h-7 w-7 text-emerald-400 hover:bg-emerald-500/10"
+                  disabled={isSaving || !newDeckName.trim()}
                   onClick={() => createDeckFn(newDeckName, null)}
                 >
-                  <Check className="h-3.5 w-3.5" />
+                  {isSaving ? <div className="h-3 w-3 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent" /> : <Check className="h-3.5 w-3.5" />}
                 </Button>
                 <Button
                   size="icon"
                   variant="ghost"
                   className="h-7 w-7 text-muted-foreground/60"
+                  disabled={isSaving}
                   onClick={() => setCreatingParent(false)}
                 >
                   <X className="h-3.5 w-3.5" />

@@ -402,6 +402,13 @@ export function subscribeDecks(callback: DecksCallback): () => void {
       _deckCacheReady = true
 
       callback(tree)
+    },
+    (error) => {
+      console.error('[subscribeDecks] Firestore error:', error.code, error.message)
+      if (error.code === 'permission-denied') {
+        console.error('[subscribeDecks] Firestore rules may be blocking reads. Check Firebase Console > Firestore > Rules.')
+      }
+      callback([])
     }
   )
   return unsubscribeDecks
@@ -410,6 +417,8 @@ export function subscribeDecks(callback: DecksCallback): () => void {
 // subscribeFlashcards - EFFICIENT: queries ONLY cards for selected deck!
 // When deckId is null: queries ALL cards (initial load)
 // When deckId is set: queries ONLY cards where deckId matches (or parent+children)
+// NOTE: We do NOT use orderBy in queries with where() to avoid needing composite indexes.
+// Sorting is done client-side instead.
 export function subscribeFlashcards(
   deckId: string | null,
   callback: FlashcardsCallback,
@@ -427,73 +436,80 @@ export function subscribeFlashcards(
     }
   }
 
-  // Build Firestore query
+  // Build Firestore query - NO orderBy with where() to avoid composite index requirement!
+  // Sorting is done client-side after receiving data.
   let firestoreQuery
   if (targetDeckIds && targetDeckIds.length === 1) {
-    // Single deck - simple equality filter
     firestoreQuery = query(
       collection(db, CARDS_COL),
-      where('deckId', '==', targetDeckIds[0]),
-      orderBy('createdAt', 'desc')
+      where('deckId', '==', targetDeckIds[0])
     )
   } else if (targetDeckIds && targetDeckIds.length > 1) {
-    // Multiple decks (parent + children) - use 'in' query
     firestoreQuery = query(
       collection(db, CARDS_COL),
-      where('deckId', 'in', targetDeckIds),
-      orderBy('createdAt', 'desc')
+      where('deckId', 'in', targetDeckIds)
     )
   } else {
-    // All cards
-    firestoreQuery = query(
-      collection(db, CARDS_COL),
-      orderBy('createdAt', 'desc')
-    )
+    firestoreQuery = collection(db, CARDS_COL)
   }
 
-  const unsubscribeCards = onSnapshot(firestoreQuery, (snap) => {
-    // Update local card count map from this snapshot
-    let newCountMap: Record<string, number> = { ..._cardCountMap }
+  const unsubscribeCards = onSnapshot(
+    firestoreQuery,
+    (snap) => {
+      // Update local card count map from this snapshot
+      let newCountMap: Record<string, number> = { ..._cardCountMap }
 
-    // For single deck queries, only that deck's count changed
-    // For 'all' or 'in' queries, recount from snapshot
-    if (targetDeckIds) {
-      // Reset counts for target decks and recount
-      for (const tid of targetDeckIds) {
-        newCountMap[tid] = 0
+      if (targetDeckIds) {
+        for (const tid of targetDeckIds) {
+          newCountMap[tid] = 0
+        }
+        snap.docs.forEach((docSnap) => {
+          const did = docSnap.data().deckId
+          if (did && targetDeckIds.includes(did)) {
+            newCountMap[did] = (newCountMap[did] || 0) + 1
+          }
+        })
+      } else {
+        newCountMap = {}
+        snap.docs.forEach((docSnap) => {
+          const did = docSnap.data().deckId
+          if (did) {
+            newCountMap[did] = (newCountMap[did] || 0) + 1
+          }
+        })
       }
-      snap.docs.forEach((docSnap) => {
-        const did = docSnap.data().deckId
-        if (did && targetDeckIds.includes(did)) {
-          newCountMap[did] = (newCountMap[did] || 0) + 1
-        }
-      })
-    } else {
-      // Full recount from all cards snapshot
-      newCountMap = {}
-      snap.docs.forEach((docSnap) => {
-        const did = docSnap.data().deckId
-        if (did) {
-          newCountMap[did] = (newCountMap[did] || 0) + 1
-        }
-      })
+
+      _cardCountMap = newCountMap
+
+      if (onCardCountUpdate) {
+        onCardCountUpdate(_cardCountMap)
+      }
+
+      // Process cards and SORT client-side by createdAt descending
+      const cards = snap.docs
+        .map((docSnap) => {
+          const d = docSnap.data()
+          return flashcardFromDoc(docSnap, getDeckName(d.deckId))
+        })
+        .sort((a, b) => {
+          const aTime = a.createdAt ? (a.createdAt.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt).getTime()) : 0
+          const bTime = b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt).getTime()) : 0
+          return bTime - aTime // newest first
+        })
+
+      callback(cards)
+    },
+    (error) => {
+      // CRITICAL: Log errors instead of silently failing!
+      console.error('[subscribeFlashcards] Firestore error:', error.code, error.message)
+      // If permission denied, it's likely a Firestore rules issue
+      if (error.code === 'permission-denied') {
+        console.error('[subscribeFlashcards] Firestore rules may be blocking reads. Check Firebase Console > Firestore > Rules.')
+      }
+      // Still call callback with empty array so UI doesn't hang
+      callback([])
     }
-
-    _cardCountMap = newCountMap
-
-    // Notify parent about count updates for deck sidebar refresh
-    if (onCardCountUpdate) {
-      onCardCountUpdate(_cardCountMap)
-    }
-
-    // Process cards with deck names from cache
-    const cards = snap.docs.map((docSnap) => {
-      const d = docSnap.data()
-      return flashcardFromDoc(docSnap, getDeckName(d.deckId))
-    })
-
-    callback(cards)
-  })
+  )
 
   return unsubscribeCards
 }
@@ -501,11 +517,25 @@ export function subscribeFlashcards(
 // ─── Seed Data (NON-BLOCKING) ────────────────────────────────────
 
 export async function seedData(): Promise<void> {
+  // Use localStorage to remember if seed has been done (prevents re-seeding on F5)
+  if (typeof window !== 'undefined' && localStorage.getItem('flashcard_seeded')) {
+    return
+  }
+
   // Quick check: only query 1 document to see if data exists
-  const existingSnap = await getDocs(
-    query(collection(db, DECKS_COL), limit(1))
-  )
-  if (!existingSnap.empty) return
+  try {
+    const existingSnap = await getDocs(
+      query(collection(db, DECKS_COL), limit(1))
+    )
+    if (!existingSnap.empty) {
+      // Data exists - mark as seeded
+      if (typeof window !== 'undefined') localStorage.setItem('flashcard_seeded', 'true')
+      return
+    }
+  } catch (err) {
+    console.error('[seedData] Error checking existing data:', err)
+    return
+  }
 
   const now = Timestamp.now()
   const pastReview = Timestamp.fromDate(
