@@ -14,6 +14,7 @@ import {
   writeBatch,
   Timestamp,
   serverTimestamp,
+  limit,
 } from 'firebase/firestore'
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -77,7 +78,7 @@ function deckFromDoc(docSnap: any): DeckData {
     name: d.name || '',
     parentId: d.parentId || null,
     order: d.order ?? 0,
-    totalCount: d.totalCount ?? 0,
+    totalCount: 0, // populated by subscribeDecks from local map
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,
   }
@@ -128,95 +129,62 @@ export function toDateOrNow(value: any): Date {
 const DECKS_COL = 'decks'
 const CARDS_COL = 'flashcards'
 
-// ─── Deck CRUD ───────────────────────────────────────────────────
+// ─── Global Deck Cache ──────────────────────────────────────────
+// Populated by subscribeDecks. Used by subscribeFlashcards to build
+// efficient server-side queries.
 
-export async function getDecks(): Promise<DeckData[]> {
-  // 1. Get all parent decks
-  const parentSnap = await getDocs(
-    query(collection(db, DECKS_COL), where('parentId', '==', null), orderBy('order', 'asc'))
-  )
+let _deckNameCache: Record<string, string> = {}
+let _deckParentCache: Record<string, string | null> = {}
+let _parentDeckIds: Set<string> = new Set()
+let _allDeckIds: string[] = []
+let _deckTree: DeckData[] = []
+let _deckCacheReady = false
 
-  if (parentSnap.empty) return []
+// Local card count map - updated incrementally
+let _cardCountMap: Record<string, number> = {}
 
-  const parentIds = parentSnap.docs.map((d) => d.id)
-
-  // 2. Get all child decks where parentId in parentIds
-  const childrenSnap = await getDocs(
-    query(collection(db, DECKS_COL), where('parentId', 'in', parentIds), orderBy('order', 'asc'))
-  )
-
-  // 3. Build parent deck objects
-  const parents: DeckData[] = parentSnap.docs.map((docSnap) => ({
-    ...deckFromDoc(docSnap),
-    children: [],
-  }))
-
-  // 4. Assign children to parents
-  const childMap: Record<string, DeckData[]> = {}
-  childrenSnap.docs.forEach((docSnap) => {
-    const data = docSnap.data()
-    const pid = data.parentId
-    if (!childMap[pid]) childMap[pid] = []
-    childMap[pid].push(deckFromDoc(docSnap))
-  })
-
-  parents.forEach((p) => {
-    p.children = childMap[p.id] || []
-  })
-
-  // 5. Get flashcard counts per deck
-  const allDeckIds = [
-    ...parentIds,
-    ...childrenSnap.docs.map((d) => d.id),
-  ]
-
-  let deckCardCounts: Record<string, number> = {}
-  if (allDeckIds.length > 0) {
-    // Firestore 'in' queries support max 30 items per query
-    const chunks: string[][] = []
-    for (let i = 0; i < allDeckIds.length; i += 30) {
-      chunks.push(allDeckIds.slice(i, i + 30))
+function getChildDeckIds(parentId: string): Set<string> {
+  const ids = new Set<string>([parentId])
+  Object.entries(_deckParentCache).forEach(([id, pid]) => {
+    if (pid === parentId) {
+      ids.add(id)
+      const nested = getChildDeckIds(id)
+      nested.forEach(nid => ids.add(nid))
     }
-    for (const chunk of chunks) {
-      const cardsSnap = await getDocs(
-        query(collection(db, CARDS_COL), where('deckId', 'in', chunk))
-      )
-      cardsSnap.docs.forEach((docSnap) => {
-        const deckId = docSnap.data().deckId
-        deckCardCounts[deckId] = (deckCardCounts[deckId] || 0) + 1
-      })
-    }
-  }
-
-  // 6. Calculate totalCount (parent includes children counts)
-  parents.forEach((p) => {
-    const childCount = (p.children || []).reduce(
-      (sum, c) => sum + (deckCardCounts[c.id] || 0),
-      0
-    )
-    p.totalCount = (deckCardCounts[p.id] || 0) + childCount
-    ;(p.children || []).forEach((c) => {
-      c.totalCount = deckCardCounts[c.id] || 0
-    })
   })
-
-  return parents
+  return ids
 }
 
+function invalidateDeckCache() {
+  _deckNameCache = {}
+  _deckParentCache = {}
+  _parentDeckIds = new Set()
+  _allDeckIds = []
+  _deckTree = []
+  _deckCacheReady = false
+}
+
+function getDeckName(deckId: string): string {
+  return _deckNameCache[deckId] || ''
+}
+
+// ─── Deck CRUD ───────────────────────────────────────────────────
+
 export async function createDeck(data: { name: string; parentId: string | null }): Promise<string> {
+  const now = Timestamp.now()
   const docRef = await addDoc(collection(db, DECKS_COL), {
     name: data.name.trim(),
     parentId: data.parentId || null,
     order: 0,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    createdAt: now,
+    updatedAt: now,
   })
   return docRef.id
 }
 
 export async function updateDeck(id: string, data: Partial<{ name: string; parentId: string; order: number }>) {
   const ref = doc(db, DECKS_COL, id)
-  const updateData: Record<string, any> = { updatedAt: serverTimestamp() }
+  const updateData: Record<string, any> = { updatedAt: Timestamp.now() }
   if (data.name !== undefined) updateData.name = data.name.trim()
   if (data.parentId !== undefined) updateData.parentId = data.parentId || null
   if (data.order !== undefined) updateData.order = data.order
@@ -248,99 +216,10 @@ async function deleteDeckRecursive(deckId: string) {
   await batch.commit()
 }
 
-// ─── Flashcard CRUD ──────────────────────────────────────────────
-
-export async function getFlashcards(
-  deckId?: string | null,
-  includeChildren: boolean = false
-): Promise<FlashcardData[]> {
-  // Get all decks for name lookup
-  const allDecksSnap = await getDocs(collection(db, DECKS_COL))
-  const deckNameMap: Record<string, string> = {}
-  allDecksSnap.docs.forEach((d) => {
-    deckNameMap[d.id] = d.data().name
-  })
-
-  let deckIds: string[] | null = null
-
-  if (deckId && includeChildren) {
-    // Get all descendant deck IDs
-    deckIds = await getDescendantDeckIds(deckId)
-    deckIds.push(deckId)
-  } else if (deckId) {
-    deckIds = [deckId]
-  }
-
-  let q
-  if (deckIds && deckIds.length > 0) {
-    // Firestore 'in' queries support max 30 items
-    if (deckIds.length <= 30) {
-      q = query(collection(db, CARDS_COL), where('deckId', 'in', deckIds), orderBy('createdAt', 'desc'))
-    } else {
-      // Fallback: get all cards if too many deck IDs
-      q = query(collection(db, CARDS_COL), orderBy('createdAt', 'desc'))
-    }
-  } else {
-    q = query(collection(db, CARDS_COL), orderBy('createdAt', 'desc'))
-  }
-
-  const snap = await getDocs(q)
-  return snap.docs.map((docSnap) => {
-    const d = docSnap.data()
-    return flashcardFromDoc(docSnap, deckNameMap[d.deckId])
-  })
-}
-
-async function getDescendantDeckIds(parentId: string): Promise<string[]> {
-  const childrenSnap = await getDocs(
-    query(collection(db, DECKS_COL), where('parentId', '==', parentId))
-  )
-  const ids: string[] = []
-  for (const childDoc of childrenSnap.docs) {
-    ids.push(childDoc.id)
-    const childIds = await getDescendantDeckIds(childDoc.id)
-    ids.push(...childIds)
-  }
-  return ids
-}
-
-export async function getDueFlashcards(deckId?: string | null): Promise<FlashcardData[]> {
-  const now = Timestamp.now()
-  const allDecksSnap = await getDocs(collection(db, DECKS_COL))
-  const deckNameMap: Record<string, string> = {}
-  allDecksSnap.docs.forEach((d) => {
-    deckNameMap[d.id] = d.data().name
-  })
-
-  let deckIds: string[] | null = null
-  if (deckId) {
-    deckIds = await getDescendantDeckIds(deckId)
-    deckIds.push(deckId)
-  }
-
-  let q
-  if (deckIds && deckIds.length > 0) {
-    if (deckIds.length <= 30) {
-      q = query(
-        collection(db, CARDS_COL),
-        where('deckId', 'in', deckIds),
-        where('nextReview', '<=', now)
-      )
-    } else {
-      q = query(collection(db, CARDS_COL), where('nextReview', '<=', now))
-    }
-  } else {
-    q = query(collection(db, CARDS_COL), where('nextReview', '<=', now))
-  }
-
-  const snap = await getDocs(q)
-  return snap.docs.map((docSnap) => {
-    const d = docSnap.data()
-    return flashcardFromDoc(docSnap, deckNameMap[d.deckId])
-  })
-}
+// ─── Flashcard CRUD (PERFORMANCE: use Timestamp.now instead of serverTimestamp) ──
 
 export async function createFlashcard(data: FlashcardFormData): Promise<string> {
+  const now = Timestamp.now()
   const docRef = await addDoc(collection(db, CARDS_COL), {
     vocabulary: data.vocabulary,
     ipa: data.ipa,
@@ -353,19 +232,19 @@ export async function createFlashcard(data: FlashcardFormData): Promise<string> 
     srsLevel: 0,
     easeFactor: 2.5,
     interval: 0,
-    nextReview: Timestamp.now(),
+    nextReview: now,
     reviewCount: 0,
     lastReview: null,
     deckId: data.deckId,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    createdAt: now,
+    updatedAt: now,
   })
   return docRef.id
 }
 
 export async function updateFlashcard(id: string, data: Partial<FlashcardFormData>) {
   const ref = doc(db, CARDS_COL, id)
-  const updateData: Record<string, any> = { updatedAt: serverTimestamp() }
+  const updateData: Record<string, any> = { updatedAt: Timestamp.now() }
   if (data.vocabulary !== undefined) updateData.vocabulary = data.vocabulary
   if (data.ipa !== undefined) updateData.ipa = data.ipa
   if (data.wordType !== undefined) updateData.wordType = data.wordType
@@ -451,14 +330,15 @@ export async function reviewFlashcard(
   const d = cardSnap.data()
   const result = applySM2(d.srsLevel ?? 0, d.easeFactor ?? 2.5, d.interval ?? 0, rating)
 
+  const now = Timestamp.now()
   await updateDoc(cardRef, {
     srsLevel: result.newLevel,
     easeFactor: result.newEaseFactor,
     interval: result.newInterval,
     nextReview: Timestamp.fromDate(result.nextReview),
     reviewCount: (d.reviewCount ?? 0) + 1,
-    lastReview: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    lastReview: now,
+    updatedAt: now,
   })
 
   return {
@@ -468,63 +348,18 @@ export async function reviewFlashcard(
   }
 }
 
-// ─── Realtime Subscriptions (Optimized) ───────────────────────────
+// ─── Realtime Subscriptions (OPTIMIZED) ──────────────────────────
 
 export type DecksCallback = (decks: DeckData[]) => void
 export type FlashcardsCallback = (cards: FlashcardData[]) => void
 
-// Cache deck structure globally to avoid re-querying
-let _deckNameCache: Record<string, string> = {}
-let _deckParentCache: Record<string, string | null> = {}
-let _parentDeckIds: Set<string> = new Set()
-let _deckCacheReady = false
-
-async function ensureDeckCache(): Promise<void> {
-  if (_deckCacheReady) return
-  const snap = await getDocs(collection(db, DECKS_COL))
-  _deckNameCache = {}
-  _deckParentCache = {}
-  _parentDeckIds = new Set()
-  snap.docs.forEach((d) => {
-    const data = d.data()
-    const id = d.id
-    _deckNameCache[id] = data.name || ''
-    _deckParentCache[id] = data.parentId || null
-    if (!data.parentId) {
-      _parentDeckIds.add(id)
-    }
-  })
-  _deckCacheReady = true
-}
-
-function getChildDeckIds(parentId: string): Set<string> {
-  const ids = new Set<string>([parentId])
-  Object.entries(_deckParentCache).forEach(([id, pid]) => {
-    if (pid === parentId) {
-      ids.add(id)
-      // Also include nested children
-      const nested = getChildDeckIds(id)
-      nested.forEach(nid => ids.add(nid))
-    }
-  })
-  return ids
-}
-
-function invalidateDeckCache() {
-  _deckNameCache = {}
-  _deckParentCache = {}
-  _parentDeckIds = new Set()
-  _deckCacheReady = false
-}
-
-export async function subscribeDecks(callback: DecksCallback): Promise<() => void> {
-  // Initial load
-  let initialDone = false
-
+// subscribeDecks - LIGHTWEIGHT: no extra queries on each snapshot!
+// Card counts are maintained locally via the card count map.
+export function subscribeDecks(callback: DecksCallback): () => void {
   const unsubscribeDecks = onSnapshot(
     query(collection(db, DECKS_COL), orderBy('order', 'asc')),
-    async (snap) => {
-      // Build deck tree directly from snapshot (no extra queries!)
+    (snap) => {
+      // Build deck tree directly from snapshot (NO extra queries!)
       const allDecks: DeckData[] = snap.docs.map(deckFromDoc)
       const parents = allDecks.filter((d) => !d.parentId)
       const children = allDecks.filter((d) => d.parentId)
@@ -541,103 +376,135 @@ export async function subscribeDecks(callback: DecksCallback): Promise<() => voi
         children: childMap[p.id] || [],
       }))
 
-      // Count cards in a single query (only on initial load or deck change)
-      const allDeckIds = allDecks.map((d) => d.id)
-      const deckCardCounts: Record<string, number> = {}
-
-      if (allDeckIds.length > 0) {
-        const chunks: string[][] = []
-        for (let i = 0; i < allDeckIds.length; i += 30) {
-          chunks.push(allDeckIds.slice(i, i + 30))
-        }
-        const promises = chunks.map((chunk) =>
-          getDocs(query(collection(db, CARDS_COL), where('deckId', 'in', chunk))).then(
-            (cardsSnap) => {
-              cardsSnap.docs.forEach((docSnap) => {
-                const did = docSnap.data().deckId
-                deckCardCounts[did] = (deckCardCounts[did] || 0) + 1
-              })
-            }
-          )
-        )
-        await Promise.all(promises)
-      }
-
-      // Apply counts
+      // Apply counts from LOCAL card count map (no network queries!)
       tree.forEach((p) => {
         const childCount = (p.children || []).reduce(
-          (sum, c) => sum + (deckCardCounts[c.id] || 0),
+          (sum, c) => sum + (_cardCountMap[c.id] || 0),
           0
         )
-        p.totalCount = (deckCardCounts[p.id] || 0) + childCount
+        p.totalCount = (_cardCountMap[p.id] || 0) + childCount
         ;(p.children || []).forEach((c) => {
-          c.totalCount = deckCardCounts[c.id] || 0
+          c.totalCount = _cardCountMap[c.id] || 0
         })
       })
 
-      // Update cache
+      // Update global cache
       _deckNameCache = {}
       _deckParentCache = {}
       _parentDeckIds = new Set()
+      _allDeckIds = allDecks.map((d) => d.id)
       allDecks.forEach((d) => {
         _deckNameCache[d.id] = d.name
         _deckParentCache[d.id] = d.parentId
         if (!d.parentId) _parentDeckIds.add(d.id)
       })
+      _deckTree = tree
       _deckCacheReady = true
 
-      initialDone = true
       callback(tree)
     }
   )
   return unsubscribeDecks
 }
 
-export async function subscribeFlashcards(
+// subscribeFlashcards - EFFICIENT: queries ONLY cards for selected deck!
+// When deckId is null: queries ALL cards (initial load)
+// When deckId is set: queries ONLY cards where deckId matches (or parent+children)
+export function subscribeFlashcards(
   deckId: string | null,
-  callback: FlashcardsCallback
-): Promise<() => void> {
-  // Warm up deck cache (usually already cached from subscribeDecks)
-  await ensureDeckCache()
+  callback: FlashcardsCallback,
+  onCardCountUpdate?: (countMap: Record<string, number>) => void
+): () => void {
+  // Determine deck IDs to query
+  let targetDeckIds: string[] | null = null
 
-  // Determine if selected deck is a parent (from cache - instant!)
-  const isParent = deckId ? _parentDeckIds.has(deckId) : false
-  let includeDeckIds: Set<string> | null = null
-
-  if (deckId && isParent) {
-    includeDeckIds = getChildDeckIds(deckId)
+  if (deckId && _deckCacheReady) {
+    const isParent = _parentDeckIds.has(deckId)
+    if (isParent) {
+      targetDeckIds = Array.from(getChildDeckIds(deckId))
+    } else {
+      targetDeckIds = [deckId]
+    }
   }
 
-  const unsubscribeCards = onSnapshot(
-    query(collection(db, CARDS_COL), orderBy('createdAt', 'desc')),
-    (snap) => {
-      // Process cards directly from snapshot (no extra queries!)
-      const allCards = snap.docs.map((docSnap) => {
-        const d = docSnap.data()
-        return flashcardFromDoc(docSnap, _deckNameCache[d.deckId] || '')
-      })
+  // Build Firestore query
+  let firestoreQuery
+  if (targetDeckIds && targetDeckIds.length === 1) {
+    // Single deck - simple equality filter
+    firestoreQuery = query(
+      collection(db, CARDS_COL),
+      where('deckId', '==', targetDeckIds[0]),
+      orderBy('createdAt', 'desc')
+    )
+  } else if (targetDeckIds && targetDeckIds.length > 1) {
+    // Multiple decks (parent + children) - use 'in' query
+    firestoreQuery = query(
+      collection(db, CARDS_COL),
+      where('deckId', 'in', targetDeckIds),
+      orderBy('createdAt', 'desc')
+    )
+  } else {
+    // All cards
+    firestoreQuery = query(
+      collection(db, CARDS_COL),
+      orderBy('createdAt', 'desc')
+    )
+  }
 
-      // Filter client-side using cache (instant, no network!)
-      let filteredCards = allCards
-      if (deckId) {
-        if (includeDeckIds) {
-          filteredCards = allCards.filter((c) => includeDeckIds.has(c.deckId))
-        } else {
-          filteredCards = allCards.filter((c) => c.deckId === deckId)
-        }
+  const unsubscribeCards = onSnapshot(firestoreQuery, (snap) => {
+    // Update local card count map from this snapshot
+    let newCountMap: Record<string, number> = { ..._cardCountMap }
+
+    // For single deck queries, only that deck's count changed
+    // For 'all' or 'in' queries, recount from snapshot
+    if (targetDeckIds) {
+      // Reset counts for target decks and recount
+      for (const tid of targetDeckIds) {
+        newCountMap[tid] = 0
       }
-
-      callback(filteredCards)
+      snap.docs.forEach((docSnap) => {
+        const did = docSnap.data().deckId
+        if (did && targetDeckIds.includes(did)) {
+          newCountMap[did] = (newCountMap[did] || 0) + 1
+        }
+      })
+    } else {
+      // Full recount from all cards snapshot
+      newCountMap = {}
+      snap.docs.forEach((docSnap) => {
+        const did = docSnap.data().deckId
+        if (did) {
+          newCountMap[did] = (newCountMap[did] || 0) + 1
+        }
+      })
     }
-  )
+
+    _cardCountMap = newCountMap
+
+    // Notify parent about count updates for deck sidebar refresh
+    if (onCardCountUpdate) {
+      onCardCountUpdate(_cardCountMap)
+    }
+
+    // Process cards with deck names from cache
+    const cards = snap.docs.map((docSnap) => {
+      const d = docSnap.data()
+      return flashcardFromDoc(docSnap, getDeckName(d.deckId))
+    })
+
+    callback(cards)
+  })
+
   return unsubscribeCards
 }
 
-// ─── Seed Data ───────────────────────────────────────────────────
+// ─── Seed Data (NON-BLOCKING) ────────────────────────────────────
 
 export async function seedData(): Promise<void> {
-  // Check if decks already exist
-  const existingSnap = await getDocs(collection(db, DECKS_COL))
+  // Quick check: only query 1 document to see if data exists
+  const existingSnap = await getDocs(
+    query(collection(db, DECKS_COL), limit(1))
+  )
   if (!existingSnap.empty) return
 
   const now = Timestamp.now()

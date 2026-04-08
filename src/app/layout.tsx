@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FlashCard - Học từ vựng hiệu quả",
+  title: "FlashCard SRS - Học từ vựng hiệu quả",
   description: "Ứng dụng quản lý và học từ vựng theo phong cách ANKI. Học tiếng Anh hiệu quả với flashcard thông minh.",
-  keywords: ["flashcard", "ANKI", "học từ vựng", "tiếng Anh", "vocabulary"],
+  keywords: ["flashcard", "ANKI", "học từ vựng", "tiếng Anh", "vocabulary", "SRS"],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },
@@ -28,9 +28,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi" suppressHydrationWarning>
+    <html lang="vi" className="dark" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        style={{
+          background: 'linear-gradient(135deg, #0a0a12 0%, #0f0f1a 40%, #0a0a18 100%)',
+          minHeight: '100vh',
+        }}
       >
         {children}
         <Toaster />

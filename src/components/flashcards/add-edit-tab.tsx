@@ -14,7 +14,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Select,
   SelectContent,
@@ -23,7 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
-import { Save, X, Plus } from 'lucide-react'
+import { Save, X, Plus, PenLine } from 'lucide-react'
 
 interface AddEditTabProps {
   editingCard: FlashcardData | null
@@ -139,17 +138,17 @@ export function AddEditTab({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">
+          <h2 className="text-2xl font-bold gradient-text">
             {editingCard ? 'Sửa thẻ' : 'Thêm thẻ mới'}
           </h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground/60 mt-1">
             {editingCard
               ? `Đang sửa: ${editingCard.vocabulary}`
               : 'Điền thông tin để tạo thẻ từ vựng mới'}
           </p>
         </div>
         {editingCard && (
-          <Button variant="outline" size="sm" onClick={handleCancel}>
+          <Button variant="outline" size="sm" className="border-white/10 hover:bg-white/5" onClick={handleCancel}>
             <X className="mr-1 h-4 w-4" />
             Hủy
           </Button>
@@ -157,19 +156,20 @@ export function AddEditTab({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Form */}
-        <Card className="border-border/50">
-          <CardHeader>
-            <CardTitle className="text-lg">Thông tin thẻ</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        {/* Form - Glass card */}
+        <div className="glass rounded-2xl p-6 glow-primary">
+          <h3 className="text-lg font-semibold text-foreground/90 mb-4 flex items-center gap-2">
+            <PenLine className="h-4 w-4 text-purple-400" />
+            Thông tin thẻ
+          </h3>
+          <div className="space-y-4">
             {/* Deck selector */}
             <div className="space-y-2">
-              <Label>
-                Bộ từ <span className="text-destructive">*</span>
+              <Label className="text-muted-foreground/80 text-xs uppercase tracking-wide font-medium">
+                Bộ từ <span className="text-red-400">*</span>
               </Label>
               <Select value={formData.deckId} onValueChange={(v) => updateField('deckId', v)}>
-                <SelectTrigger>
+                <SelectTrigger className="bg-white/5 border-white/10 rounded-lg hover:border-purple-500/30 focus:border-purple-500/40 transition-colors">
                   <SelectValue placeholder="Chọn bộ từ" />
                 </SelectTrigger>
                 <SelectContent>
@@ -186,37 +186,39 @@ export function AddEditTab({
 
             {/* Vocabulary */}
             <div className="space-y-2">
-              <Label htmlFor="vocabulary">
-                Từ vựng <span className="text-destructive">*</span>
+              <Label htmlFor="vocabulary" className="text-muted-foreground/80 text-xs uppercase tracking-wide font-medium">
+                Từ vựng <span className="text-red-400">*</span>
               </Label>
               <Input
                 id="vocabulary"
                 placeholder="Ví dụ: Beautiful"
                 value={formData.vocabulary}
                 onChange={(e) => updateField('vocabulary', e.target.value)}
+                className="bg-white/5 border-white/10 rounded-lg hover:border-purple-500/30 focus:border-purple-500/40 transition-colors"
               />
             </div>
 
             {/* IPA */}
             <div className="space-y-2">
-              <Label htmlFor="ipa">
-                IPA <span className="text-destructive">*</span>
+              <Label htmlFor="ipa" className="text-muted-foreground/80 text-xs uppercase tracking-wide font-medium">
+                IPA <span className="text-red-400">*</span>
               </Label>
               <Input
                 id="ipa"
                 placeholder="Ví dụ: /ˈbjuːtɪfəl/"
                 value={formData.ipa}
                 onChange={(e) => updateField('ipa', e.target.value)}
+                className="bg-white/5 border-white/10 rounded-lg hover:border-purple-500/30 focus:border-purple-500/40 transition-colors"
               />
             </div>
 
             {/* Word Type */}
             <div className="space-y-2">
-              <Label htmlFor="wordType">
-                Loại từ <span className="text-destructive">*</span>
+              <Label htmlFor="wordType" className="text-muted-foreground/80 text-xs uppercase tracking-wide font-medium">
+                Loại từ <span className="text-red-400">*</span>
               </Label>
               <Select value={formData.wordType} onValueChange={(v) => updateField('wordType', v)}>
-                <SelectTrigger id="wordType">
+                <SelectTrigger id="wordType" className="bg-white/5 border-white/10 rounded-lg hover:border-purple-500/30 focus:border-purple-500/40 transition-colors">
                   <SelectValue placeholder="Chọn loại từ" />
                 </SelectTrigger>
                 <SelectContent>
@@ -231,8 +233,8 @@ export function AddEditTab({
 
             {/* Meaning */}
             <div className="space-y-2">
-              <Label htmlFor="meaning">
-                Nghĩa <span className="text-destructive">*</span>
+              <Label htmlFor="meaning" className="text-muted-foreground/80 text-xs uppercase tracking-wide font-medium">
+                Nghĩa <span className="text-red-400">*</span>
               </Label>
               <Textarea
                 id="meaning"
@@ -240,48 +242,64 @@ export function AddEditTab({
                 value={formData.meaning}
                 onChange={(e) => updateField('meaning', e.target.value)}
                 rows={2}
+                className="bg-white/5 border-white/10 rounded-lg hover:border-purple-500/30 focus:border-purple-500/40 transition-colors resize-none"
               />
             </div>
 
             {/* Example 1 */}
             <div className="space-y-2">
-              <Label htmlFor="example1">Ví dụ 1</Label>
+              <Label htmlFor="example1" className="text-muted-foreground/80 text-xs uppercase tracking-wide font-medium">
+                Ví dụ 1
+              </Label>
               <Textarea
                 id="example1"
                 placeholder="Câu ví dụ tiếng Anh"
                 value={formData.example1}
                 onChange={(e) => updateField('example1', e.target.value)}
                 rows={2}
+                className="bg-white/5 border-white/10 rounded-lg hover:border-purple-500/30 focus:border-purple-500/40 transition-colors resize-none"
               />
               <Input
                 placeholder="URL hình ảnh (không bắt buộc)"
                 value={formData.example1Image}
                 onChange={(e) => updateField('example1Image', e.target.value)}
+                className="bg-white/5 border-white/10 rounded-lg hover:border-purple-500/30 focus:border-purple-500/40 transition-colors"
               />
             </div>
 
             {/* Example 2 */}
             <div className="space-y-2">
-              <Label htmlFor="example2">Ví dụ 2</Label>
+              <Label htmlFor="example2" className="text-muted-foreground/80 text-xs uppercase tracking-wide font-medium">
+                Ví dụ 2
+              </Label>
               <Textarea
                 id="example2"
                 placeholder="Câu ví dụ tiếng Anh"
                 value={formData.example2}
                 onChange={(e) => updateField('example2', e.target.value)}
                 rows={2}
+                className="bg-white/5 border-white/10 rounded-lg hover:border-purple-500/30 focus:border-purple-500/40 transition-colors resize-none"
               />
               <Input
                 placeholder="URL hình ảnh (không bắt buộc)"
                 value={formData.example2Image}
                 onChange={(e) => updateField('example2Image', e.target.value)}
+                className="bg-white/5 border-white/10 rounded-lg hover:border-purple-500/30 focus:border-purple-500/40 transition-colors"
               />
             </div>
 
             {/* Actions */}
             <div className="flex gap-3 pt-2">
-              <Button onClick={handleSave} disabled={isSaving} className="flex-1">
+              <Button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="flex-1 btn-gradient rounded-xl text-white font-medium h-10"
+              >
                 {isSaving ? (
-                  'Đang lưu...'
+                  <span className="flex items-center gap-2">
+                    <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Đang lưu...
+                  </span>
                 ) : editingCard ? (
                   <>
                     <Save className="mr-2 h-4 w-4" />
@@ -294,13 +312,13 @@ export function AddEditTab({
                   </>
                 )}
               </Button>
-              <Button variant="outline" onClick={handleCancel}>
+              <Button variant="outline" className="border-white/10 hover:bg-white/5 rounded-xl" onClick={handleCancel}>
                 <X className="mr-2 h-4 w-4" />
                 Hủy
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Live Preview */}
         <div>

@@ -64,14 +64,14 @@ export function flashcardToForm(card: FlashcardData): FlashcardFormDataLocal {
   }
 }
 
-// SRS Level configuration
+// SRS Level configuration - designed for dark theme with gradient badges
 export const SRS_LEVELS = [
-  { level: 0, label: 'Chưa học', color: 'bg-gray-400', textColor: 'text-gray-400', shortLabel: 'Mới' },
-  { level: 1, label: 'Mới nhớ', color: 'bg-orange-400', textColor: 'text-orange-400', shortLabel: 'L1' },
-  { level: 2, label: 'Dễ quên', color: 'bg-yellow-400', textColor: 'text-yellow-400', shortLabel: 'L2' },
-  { level: 3, label: 'Khá tốt', color: 'bg-blue-400', textColor: 'text-blue-400', shortLabel: 'L3' },
-  { level: 4, label: 'Tốt', color: 'bg-purple-400', textColor: 'text-purple-400', shortLabel: 'L4' },
-  { level: 5, label: 'Thành thạo', color: 'bg-emerald-400', textColor: 'text-emerald-400', shortLabel: 'L5' },
+  { level: 0, label: 'Chưa học', textColor: 'text-gray-400', shortLabel: 'Mới', badgeClass: 'srs-badge-l0', barClass: 'srs-bar-l0' },
+  { level: 1, label: 'Mới nhớ', textColor: 'text-orange-400', shortLabel: 'L1', badgeClass: 'srs-badge-l1', barClass: 'srs-bar-l1' },
+  { level: 2, label: 'Dễ quên', textColor: 'text-yellow-400', shortLabel: 'L2', badgeClass: 'srs-badge-l2', barClass: 'srs-bar-l2' },
+  { level: 3, label: 'Khá tốt', textColor: 'text-blue-400', shortLabel: 'L3', badgeClass: 'srs-badge-l3', barClass: 'srs-bar-l3' },
+  { level: 4, label: 'Tốt', textColor: 'text-purple-400', shortLabel: 'L4', badgeClass: 'srs-badge-l4', barClass: 'srs-bar-l4' },
+  { level: 5, label: 'Thành thạo', textColor: 'text-emerald-400', shortLabel: 'L5', badgeClass: 'srs-badge-l5', barClass: 'srs-bar-l5' },
 ]
 
 export function getSRSLevelConfig(level: number) {
@@ -88,8 +88,8 @@ export const RATING_CONFIG: {
   hoverColor: string
   icon: string
 }[] = [
-  { rating: 'again', label: 'Nhớ lại', color: 'bg-red-500/20 text-red-400 border-red-500/30', hoverColor: 'hover:bg-red-500/30 hover:border-red-500/50', icon: '😵' },
-  { rating: 'hard', label: 'Khó', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30', hoverColor: 'hover:bg-orange-500/30 hover:border-orange-500/50', icon: '😤' },
-  { rating: 'good', label: 'Tốt', color: 'bg-green-500/20 text-green-400 border-green-500/30', hoverColor: 'hover:bg-green-500/30 hover:border-green-500/50', icon: '😊' },
-  { rating: 'easy', label: 'Dễ', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', hoverColor: 'hover:bg-emerald-500/30 hover:border-emerald-500/50', icon: '🤩' },
+  { rating: 'again', label: 'Nhớ lại', color: 'bg-red-500/15 text-red-400 border-red-500/30', hoverColor: 'hover:bg-red-500/25 hover:border-red-500/50 hover:shadow-[0_0_15px_rgba(239,68,68,0.2)]', icon: '😵' },
+  { rating: 'hard', label: 'Khó', color: 'bg-orange-500/15 text-orange-400 border-orange-500/30', hoverColor: 'hover:bg-orange-500/25 hover:border-orange-500/50 hover:shadow-[0_0_15px_rgba(249,115,22,0.2)]', icon: '😤' },
+  { rating: 'good', label: 'Tốt', color: 'bg-green-500/15 text-green-400 border-green-500/30', hoverColor: 'hover:bg-green-500/25 hover:border-green-500/50 hover:shadow-[0_0_15px_rgba(34,197,94,0.2)]', icon: '😊' },
+  { rating: 'easy', label: 'Dễ', color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30', hoverColor: 'hover:bg-emerald-500/25 hover:border-emerald-500/50 hover:shadow-[0_0_15px_rgba(16,185,129,0.2)]', icon: '🤩' },
 ]

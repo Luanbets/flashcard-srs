@@ -27,6 +27,7 @@ import {
   Trash2,
   X,
   Check,
+  Layers,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -146,30 +147,30 @@ export function DeckSidebar({
     <>
       <div className="flex h-full flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border/50 px-3 py-3">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="flex items-center justify-between px-3 py-3">
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/60">
             Bộ từ
           </span>
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7"
+            className="h-7 w-7 text-muted-foreground/60 hover:text-foreground hover:bg-white/5"
             onClick={() => setCreatingParent(true)}
           >
             <Plus className="h-4 w-4" />
           </Button>
         </div>
 
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 custom-scrollbar">
           <div className="p-2">
             {/* All decks option */}
             <button
               onClick={() => onSelectDeck(null)}
               className={cn(
-                'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
+                'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-all',
                 selectedDeckId === null
-                  ? 'bg-primary/15 text-primary font-medium'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                  ? 'bg-purple-500/15 text-purple-300 font-medium shadow-[0_0_12px_rgba(124,91,245,0.1)]'
+                  : 'text-muted-foreground/70 hover:bg-white/5 hover:text-foreground'
               )}
             >
               <Layers className="h-4 w-4 shrink-0" />
@@ -182,15 +183,15 @@ export function DeckSidebar({
                 {/* Parent row */}
                 <div
                   className={cn(
-                    'group flex items-center gap-1 rounded-lg px-2 py-1.5 transition-colors',
+                    'group flex items-center gap-1 rounded-xl px-2 py-1.5 transition-all',
                     selectedDeckId === parent.id
-                      ? 'bg-primary/15 text-primary'
-                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                      ? 'bg-purple-500/15 text-purple-300 shadow-[0_0_12px_rgba(124,91,245,0.1)]'
+                      : 'text-muted-foreground/70 hover:bg-white/5 hover:text-foreground'
                   )}
                 >
                   <button
                     onClick={() => toggleExpand(parent.id)}
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-accent"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg hover:bg-white/5 transition-colors"
                   >
                     {expandedParents.has(parent.id) ? (
                       <ChevronDown className="h-3.5 w-3.5" />
@@ -203,29 +204,29 @@ export function DeckSidebar({
                     className="flex flex-1 items-center gap-2 text-left text-sm"
                   >
                     {expandedParents.has(parent.id) ? (
-                      <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
+                      <FolderOpen className="h-4 w-4 shrink-0 text-purple-400" />
                     ) : (
-                      <Folder className="h-4 w-4 shrink-0" />
+                      <Folder className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                     )}
-                    <span className="truncate">{parent.name}</span>
-                    <span className="ml-auto text-xs opacity-60">{parent.totalCount}</span>
+                    <span className="truncate font-medium">{parent.name}</span>
+                    <span className="ml-auto text-[11px] opacity-50 tabular-nums">{parent.totalCount}</span>
                   </button>
-                  <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="flex shrink-0 gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => setCreatingChildFor(parent.id)}
-                      className="flex h-6 w-6 items-center justify-center rounded hover:bg-accent"
+                      className="flex h-6 w-6 items-center justify-center rounded-lg hover:bg-white/10 text-muted-foreground/50 hover:text-foreground transition-colors"
                     >
                       <Plus className="h-3.5 w-3.5" />
                     </button>
                     <button
                       onClick={() => startEdit(parent)}
-                      className="flex h-6 w-6 items-center justify-center rounded hover:bg-accent"
+                      className="flex h-6 w-6 items-center justify-center rounded-lg hover:bg-white/10 text-muted-foreground/50 hover:text-foreground transition-colors"
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
                     <button
                       onClick={() => setDeleteTarget(parent)}
-                      className="flex h-6 w-6 items-center justify-center rounded hover:bg-accent text-red-400"
+                      className="flex h-6 w-6 items-center justify-center rounded-lg hover:bg-red-500/10 text-muted-foreground/50 hover:text-red-400 transition-colors"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -238,20 +239,20 @@ export function DeckSidebar({
                     <Input
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
-                      className="h-7 text-sm"
+                      className="h-7 text-sm bg-white/5 border-white/10 rounded-lg"
                       autoFocus
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') saveEdit()
                         if (e.key === 'Escape') setEditingDeckId(null)
                       }}
                     />
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={saveEdit}>
+                    <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-400 hover:bg-emerald-500/10" onClick={saveEdit}>
                       <Check className="h-3.5 w-3.5" />
                     </Button>
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-7 w-7"
+                      className="h-7 w-7 text-muted-foreground/60"
                       onClick={() => setEditingDeckId(null)}
                     >
                       <X className="h-3.5 w-3.5" />
@@ -266,7 +267,7 @@ export function DeckSidebar({
                       value={newDeckName}
                       onChange={(e) => setNewDeckName(e.target.value)}
                       placeholder="Tên bộ con..."
-                      className="h-7 text-sm"
+                      className="h-7 text-sm bg-white/5 border-white/10 rounded-lg"
                       autoFocus
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') createDeckFn(newDeckName, parent.id)
@@ -276,7 +277,7 @@ export function DeckSidebar({
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-7 w-7"
+                      className="h-7 w-7 text-emerald-400 hover:bg-emerald-500/10"
                       onClick={() => createDeckFn(newDeckName, parent.id)}
                     >
                       <Check className="h-3.5 w-3.5" />
@@ -284,7 +285,7 @@ export function DeckSidebar({
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-7 w-7"
+                      className="h-7 w-7 text-muted-foreground/60"
                       onClick={() => setCreatingChildFor(null)}
                     >
                       <X className="h-3.5 w-3.5" />
@@ -294,37 +295,37 @@ export function DeckSidebar({
 
                 {/* Children */}
                 {expandedParents.has(parent.id) && parent.children && (
-                  <div className="ml-4 border-l border-border/50 pl-2">
+                  <div className="ml-4 border-l border-white/5 pl-2">
                     {parent.children.map((child) => (
                       <div key={child.id} className="relative">
                         <div
                           className={cn(
-                            'group flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors',
+                            'group flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-all',
                             selectedDeckId === child.id
-                              ? 'bg-primary/15 text-primary font-medium'
-                              : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                              ? 'bg-purple-500/15 text-purple-300 font-medium shadow-[0_0_12px_rgba(124,91,245,0.08)]'
+                              : 'text-muted-foreground/70 hover:bg-white/5 hover:text-foreground'
                           )}
                         >
                           <button
                             onClick={() => handleSelectDeck(child.id)}
                             className="flex flex-1 items-center gap-2 text-left"
                           >
-                            <div className="h-2 w-2 rounded-full bg-primary/60" />
+                            <div className="h-2 w-2 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 shrink-0 shadow-[0_0_6px_rgba(124,91,245,0.4)]" />
                             <span className="truncate">{child.name}</span>
-                            <span className="ml-auto text-xs opacity-60">
+                            <span className="ml-auto text-[11px] opacity-50 tabular-nums">
                               {child.totalCount}
                             </span>
                           </button>
-                          <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                          <div className="flex shrink-0 gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
                               onClick={() => startEdit(child)}
-                              className="flex h-6 w-6 items-center justify-center rounded hover:bg-accent"
+                              className="flex h-6 w-6 items-center justify-center rounded-lg hover:bg-white/10 text-muted-foreground/50 hover:text-foreground transition-colors"
                             >
                               <Pencil className="h-3.5 w-3.5" />
                             </button>
                             <button
                               onClick={() => setDeleteTarget(child)}
-                              className="flex h-6 w-6 items-center justify-center rounded hover:bg-accent text-red-400"
+                              className="flex h-6 w-6 items-center justify-center rounded-lg hover:bg-red-500/10 text-muted-foreground/50 hover:text-red-400 transition-colors"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
@@ -337,7 +338,7 @@ export function DeckSidebar({
                             <Input
                               value={editName}
                               onChange={(e) => setEditName(e.target.value)}
-                              className="h-7 text-sm"
+                              className="h-7 text-sm bg-white/5 border-white/10 rounded-lg"
                               autoFocus
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') saveEdit()
@@ -347,7 +348,7 @@ export function DeckSidebar({
                             <Button
                               size="icon"
                               variant="ghost"
-                              className="h-7 w-7"
+                              className="h-7 w-7 text-emerald-400 hover:bg-emerald-500/10"
                               onClick={saveEdit}
                             >
                               <Check className="h-3.5 w-3.5" />
@@ -355,7 +356,7 @@ export function DeckSidebar({
                             <Button
                               size="icon"
                               variant="ghost"
-                              className="h-7 w-7"
+                              className="h-7 w-7 text-muted-foreground/60"
                               onClick={() => setEditingDeckId(null)}
                             >
                               <X className="h-3.5 w-3.5" />
@@ -371,12 +372,12 @@ export function DeckSidebar({
 
             {/* Creating new parent deck */}
             {creatingParent && (
-              <div className="mt-1 flex items-center gap-1 px-2 py-1">
+              <div className="mt-2 flex items-center gap-1 px-2 py-1">
                 <Input
                   value={newDeckName}
                   onChange={(e) => setNewDeckName(e.target.value)}
                   placeholder="Tên bộ từ..."
-                  className="h-7 text-sm"
+                  className="h-7 text-sm bg-white/5 border-white/10 rounded-lg"
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') createDeckFn(newDeckName, null)
@@ -386,7 +387,7 @@ export function DeckSidebar({
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="h-7 w-7"
+                  className="h-7 w-7 text-emerald-400 hover:bg-emerald-500/10"
                   onClick={() => createDeckFn(newDeckName, null)}
                 >
                   <Check className="h-3.5 w-3.5" />
@@ -394,7 +395,7 @@ export function DeckSidebar({
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="h-7 w-7"
+                  className="h-7 w-7 text-muted-foreground/60"
                   onClick={() => setCreatingParent(false)}
                 >
                   <X className="h-3.5 w-3.5" />
@@ -407,19 +408,19 @@ export function DeckSidebar({
 
       {/* Delete Dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent className="glass-strong border-white/10">
           <AlertDialogHeader>
             <AlertDialogTitle>Xóa bộ từ &ldquo;{deleteTarget?.name}&rdquo;?</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-muted-foreground/70">
               Hành động này sẽ xóa bộ từ và tất cả thẻ trong đó. Không thể hoàn tác.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Hủy</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting} className="text-muted-foreground">Hủy</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               disabled={isDeleting}
-              className="bg-destructive text-white hover:bg-destructive/90"
+              className="bg-red-500/90 text-white hover:bg-red-500 border-0"
             >
               {isDeleting ? 'Đang xóa...' : 'Xóa'}
             </AlertDialogAction>
@@ -427,24 +428,5 @@ export function DeckSidebar({
         </AlertDialogContent>
       </AlertDialog>
     </>
-  )
-}
-
-function Layers({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z" />
-      <path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65" />
-      <path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65" />
-    </svg>
   )
 }

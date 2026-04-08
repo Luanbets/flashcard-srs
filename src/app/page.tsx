@@ -15,9 +15,9 @@ import {
   Plus,
   Menu,
   X,
-  Layers,
   BookOpen,
   PenLine,
+  Sparkles,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -32,6 +32,7 @@ export default function Home() {
   const [editingCard, setEditingCard] = useState<FlashcardData | null>(null)
   const [studyCards, setStudyCards] = useState<FlashcardData[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [decksLoaded, setDecksLoaded] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { speak, isSpeaking } = useTTS()
   const seededRef = useRef(false)
@@ -42,7 +43,7 @@ export default function Home() {
     return () => clearTimeout(timer)
   }, [])
 
-  // Seed data on first load
+  // Seed data on first load (non-blocking)
   useEffect(() => {
     if (seededRef.current) return
     seededRef.current = true
@@ -51,31 +52,25 @@ export default function Home() {
     })
   }, [])
 
-  // Subscribe to decks realtime
+  // Subscribe to decks realtime - lightweight, no extra queries
   useEffect(() => {
-    let unsub: (() => void) | undefined
-    subscribeDecks((updatedDecks) => {
+    const unsub = subscribeDecks((updatedDecks) => {
       setDecks(updatedDecks)
-    }).then((fn) => {
-      unsub = fn
+      setDecksLoaded(true)
     })
-    return () => {
-      if (unsub) unsub()
-    }
+    return () => unsub()
   }, [])
 
-  // Subscribe to flashcards realtime
+  // Subscribe to flashcards realtime - efficient per-deck queries
   useEffect(() => {
-    let unsub: (() => void) | undefined
-    subscribeFlashcards(selectedDeckId, (updatedCards) => {
-      setCards(updatedCards)
-      setIsLoading(false)
-    }).then((fn) => {
-      unsub = fn
-    })
-    return () => {
-      if (unsub) unsub()
-    }
+    const unsub = subscribeFlashcards(
+      selectedDeckId,
+      (updatedCards) => {
+        setCards(updatedCards)
+        setIsLoading(false)
+      }
+    )
+    return () => unsub()
   }, [selectedDeckId])
 
   // Handlers
@@ -134,18 +129,20 @@ export default function Home() {
     : null
 
   return (
-    <div className="flex h-screen flex-col bg-background text-foreground">
-      {/* Header */}
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-border/50 px-4">
+    <div className="flex h-screen flex-col text-foreground">
+      {/* Header - Gradient with glow */}
+      <header className="relative flex h-14 shrink-0 items-center justify-between px-4 glass-strong z-10">
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-purple-500/40 to-transparent" />
+        
         <div className="flex items-center gap-3">
           {/* Mobile sidebar trigger */}
           <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden h-9 w-9">
+              <Button variant="ghost" size="icon" className="md:hidden h-9 w-9 text-muted-foreground hover:text-foreground">
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-72 p-0">
+            <SheetContent side="left" className="w-72 p-0 glass-strong border-l border-border/20">
               <SheetTitle className="sr-only">Bộ từ</SheetTitle>
               <DeckSidebar
                 decks={decks}
@@ -157,11 +154,14 @@ export default function Home() {
           </Sheet>
 
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Layers className="h-4 w-4" />
+            <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 shadow-lg shadow-purple-500/20">
+              <Sparkles className="h-4.5 w-4.5 text-white" />
+              <div className="absolute -inset-0.5 rounded-xl bg-gradient-to-br from-purple-500/20 to-indigo-600/20 blur-sm -z-10" />
             </div>
             <div>
-              <h1 className="text-base font-bold tracking-tight leading-tight">FlashCard SRS</h1>
+              <h1 className="text-base font-bold tracking-tight leading-tight gradient-text">
+                FlashCard SRS
+              </h1>
               <p className="hidden text-[10px] text-muted-foreground sm:block">
                 Học từ vựng hiệu quả
               </p>
@@ -171,14 +171,16 @@ export default function Home() {
 
         <div className="flex items-center gap-2">
           {/* View mode tabs */}
-          <div className="hidden sm:flex items-center rounded-lg bg-muted/50 p-0.5">
+          <div className="hidden sm:flex items-center rounded-xl bg-white/5 p-0.5 border border-white/5">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setViewMode('browse')}
               className={cn(
-                'h-7 gap-1.5 px-3 text-xs',
-                viewMode === 'browse' && 'bg-background shadow-sm'
+                'h-7 gap-1.5 px-3 text-xs rounded-lg transition-all',
+                viewMode === 'browse'
+                  ? 'bg-purple-500/20 text-purple-300 shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
               )}
             >
               <BookOpen className="h-3.5 w-3.5" />
@@ -192,8 +194,10 @@ export default function Home() {
                 setViewMode('addedit')
               }}
               className={cn(
-                'h-7 gap-1.5 px-3 text-xs',
-                viewMode === 'addedit' && 'bg-background shadow-sm'
+                'h-7 gap-1.5 px-3 text-xs rounded-lg transition-all',
+                viewMode === 'addedit'
+                  ? 'bg-purple-500/20 text-purple-300 shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
               )}
             >
               <PenLine className="h-3.5 w-3.5" />
@@ -201,7 +205,11 @@ export default function Home() {
             </Button>
           </div>
 
-          <Button size="sm" onClick={handleAddNew} className="gap-1.5 h-8">
+          <Button
+            size="sm"
+            onClick={handleAddNew}
+            className="gap-1.5 h-8 btn-gradient rounded-lg text-white text-xs"
+          >
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Thêm thẻ mới</span>
           </Button>
@@ -210,8 +218,8 @@ export default function Home() {
 
       {/* Main layout */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Desktop sidebar */}
-        <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-border/50">
+        {/* Desktop sidebar - Glass effect */}
+        <aside className="hidden md:flex w-64 shrink-0 flex-col glass-strong border-r border-border/10">
           <DeckSidebar
             decks={decks}
             selectedDeckId={selectedDeckId}
@@ -232,13 +240,14 @@ export default function Home() {
                 className="flex h-full flex-col"
               >
                 {/* SRS Overview */}
-                <div className="shrink-0 border-b border-border/50 p-4">
+                <div className="shrink-0 p-4">
                   <SRSOverview cards={cards} />
                 </div>
 
                 {/* Deck name indicator */}
                 {selectedDeckName && (
-                  <div className="flex items-center gap-2 border-b border-border/50 px-4 py-2">
+                  <div className="flex items-center gap-2 px-4 py-2 border-b border-border/10">
+                    <div className="h-1.5 w-1.5 rounded-full bg-purple-500" />
                     <span className="text-xs font-medium text-muted-foreground">Bộ từ:</span>
                     <span className="text-xs font-semibold text-foreground">
                       {selectedDeckName}
@@ -246,7 +255,7 @@ export default function Home() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="ml-auto h-6 text-xs text-muted-foreground"
+                      className="ml-auto h-6 text-xs text-muted-foreground hover:text-foreground"
                       onClick={() => setSelectedDeckId(null)}
                     >
                       <X className="mr-1 h-3 w-3" />
@@ -278,7 +287,7 @@ export default function Home() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="h-full overflow-y-auto"
+                className="h-full overflow-y-auto custom-scrollbar"
               >
                 <div className="mx-auto max-w-2xl p-4 sm:p-6">
                   <StudyMode
@@ -298,7 +307,7 @@ export default function Home() {
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className="h-full overflow-y-auto"
+                className="h-full overflow-y-auto custom-scrollbar"
               >
                 <div className="mx-auto max-w-4xl p-4 sm:p-6">
                   {/* Mobile back button */}
@@ -306,6 +315,7 @@ export default function Home() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      className="text-muted-foreground"
                       onClick={() => {
                         setViewMode('browse')
                         setEditingCard(null)
@@ -329,24 +339,31 @@ export default function Home() {
       </div>
 
       {/* Mobile bottom navigation */}
-      <nav className="flex shrink-0 items-center border-t border-border/50 md:hidden">
+      <nav className="relative flex shrink-0 items-center glass-strong border-t border-border/10 md:hidden z-10">
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent" />
         <Button
           variant="ghost"
-          className="flex-1 h-12 flex-col gap-0.5 rounded-none"
+          className={cn(
+            'flex-1 h-14 flex-col gap-0.5 rounded-none transition-colors',
+            viewMode === 'browse' ? 'text-purple-400' : 'text-muted-foreground'
+          )}
           onClick={() => setViewMode('browse')}
         >
-          <BookOpen className={cn('h-5 w-5', viewMode === 'browse' && 'text-primary')} />
-          <span className={cn('text-[10px]', viewMode === 'browse' && 'text-primary font-medium')}>
+          <BookOpen className="h-5 w-5" />
+          <span className={cn('text-[10px]', viewMode === 'browse' && 'font-medium')}>
             Danh sách
           </span>
         </Button>
         <Button
           variant="ghost"
-          className="flex-1 h-12 flex-col gap-0.5 rounded-none"
+          className={cn(
+            'flex-1 h-14 flex-col gap-0.5 rounded-none transition-colors',
+            viewMode === 'addedit' ? 'text-purple-400' : 'text-muted-foreground'
+          )}
           onClick={handleAddNew}
         >
-          <Plus className={cn('h-5 w-5', viewMode === 'addedit' && 'text-primary')} />
-          <span className={cn('text-[10px]', viewMode === 'addedit' && 'text-primary font-medium')}>
+          <Plus className="h-5 w-5" />
+          <span className={cn('text-[10px]', viewMode === 'addedit' && 'font-medium')}>
             Thêm thẻ
           </span>
         </Button>
