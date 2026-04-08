@@ -1,6 +1,5 @@
 'use client'
 
-import { FlashcardData } from './types'
 import { Badge } from '@/components/ui/badge'
 import Image from 'next/image'
 
@@ -25,14 +24,12 @@ export function FlashcardPreview({
   example2,
   example2Image,
 }: FlashcardPreviewProps) {
-  const hasContent = vocabulary || ipa || wordType || meaning
-
   return (
     <div className="space-y-4">
       <p className="text-sm font-medium text-muted-foreground">Xem trước</p>
 
       {/* Front Preview */}
-      <div className="rounded-2xl border bg-white p-6 shadow-md">
+      <div className="rounded-2xl border border-border/50 bg-card p-6 shadow-md">
         <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Mặt trước
         </p>
@@ -52,13 +49,13 @@ export function FlashcardPreview({
       </div>
 
       {/* Back Preview */}
-      <div className="rounded-2xl border bg-white p-6 shadow-md">
+      <div className="rounded-2xl border border-border/50 bg-card p-6 shadow-md">
         <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Mặt sau
         </p>
         <div className="space-y-3">
           {/* Header */}
-          <div className="border-b pb-2">
+          <div className="border-b border-border/50 pb-2">
             <h3 className="text-base font-semibold text-foreground">
               {vocabulary || <span className="text-muted-foreground/40">Từ vựng</span>}{' '}
               {wordType && (

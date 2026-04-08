@@ -7,6 +7,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Deck {
+  id          String     @id @default(cuid())
+  name        String
+  parentId    String?
+  parent      Deck?      @relation("DeckHierarchy", fields: [parentId], references: [id])
+  children    Deck[]     @relation("DeckHierarchy")
+  flashcards  Flashcard[]
+  order       Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
 model Flashcard {
   id            String   @id @default(cuid())
   vocabulary    String
@@ -17,7 +29,17 @@ model Flashcard {
   example1Image String?
   example2      String?
   example2Image String?
-  deck          String   @default("default")
+
+  // SRS fields (SM-2 algorithm)
+  srsLevel      Int      @default(0)
+  easeFactor    Float    @default(2.5)
+  interval      Int      @default(0)
+  nextReview    DateTime @default(now())
+  reviewCount   Int      @default(0)
+  lastReview    DateTime?
+
+  deckId        String
+  deck          Deck     @relation(fields: [deckId], references: [id])
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }

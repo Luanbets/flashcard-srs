@@ -1,25 +1,67 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { FlashcardData, FlashcardFormData, EMPTY_FORM, WORD_TYPES, flashcardToForm } from './types'
+import {
+  FlashcardData,
+  FlashcardFormData,
+  EMPTY_FORM,
+  WORD_TYPES,
+  flashcardToForm,
+  DeckData,
+} from './types'
 import { FlashcardPreview } from './flashcard-preview'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
 import { Save, X, Plus } from 'lucide-react'
 
 interface AddEditTabProps {
   editingCard: FlashcardData | null
+  decks: DeckData[]
+  defaultDeckId: string | null
   onClearEditing: () => void
   onSaved: () => void
 }
 
-export function AddEditTab({ editingCard, onClearEditing, onSaved }: AddEditTabProps) {
-  const [formData, setFormData] = useState<FlashcardFormData>(EMPTY_FORM)
+function getAllDecks(decks: DeckData[]): { id: string; name: string; depth: number }[] {
+  const result: { id: string; name: string; depth: number }[] = []
+  for (const deck of decks) {
+    result.push({ id: deck.id, name: deck.name, depth: 0 })
+    if (deck.children) {
+      for (const child of deck.children) {
+        result.push({ id: child.id, name: child.name, depth: 1 })
+        if (child.children) {
+          for (const grandChild of child.children) {
+            result.push({ id: grandChild.id, name: grandChild.name, depth: 2 })
+          }
+        }
+      }
+    }
+  }
+  return result
+}
+
+export function AddEditTab({
+  editingCard,
+  decks,
+  defaultDeckId,
+  onClearEditing,
+  onSaved,
+}: AddEditTabProps) {
+  const [formData, setFormData] = useState<FlashcardFormData>({
+    ...EMPTY_FORM,
+    deckId: defaultDeckId || '',
+  })
   const [isSaving, setIsSaving] = useState(false)
   const { toast } = useToast()
 
@@ -27,19 +69,33 @@ export function AddEditTab({ editingCard, onClearEditing, onSaved }: AddEditTabP
     if (editingCard) {
       setFormData(flashcardToForm(editingCard))
     } else {
-      setFormData(EMPTY_FORM)
+      setFormData({ ...EMPTY_FORM, deckId: defaultDeckId || '' })
     }
-  }, [editingCard])
+  }, [editingCard, defaultDeckId])
 
   const updateField = (field: keyof FlashcardFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
   const handleSave = async () => {
-    if (!formData.vocabulary.trim() || !formData.ipa.trim() || !formData.wordType.trim() || !formData.meaning.trim()) {
+    if (
+      !formData.vocabulary.trim() ||
+      !formData.ipa.trim() ||
+      !formData.wordType.trim() ||
+      !formData.meaning.trim()
+    ) {
       toast({
         title: 'Thiếu thông tin',
         description: 'Vui lòng điền đầy đủ Từ vựng, IPA, Loại từ và Nghĩa.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (!formData.deckId) {
+      toast({
+        title: 'Chưa chọn bộ từ',
+        description: 'Vui lòng chọn bộ từ cho thẻ này.',
         variant: 'destructive',
       })
       return
@@ -62,7 +118,7 @@ export function AddEditTab({ editingCard, onClearEditing, onSaved }: AddEditTabP
             ? `Thẻ "${formData.vocabulary}" đã được cập nhật.`
             : `Thẻ "${formData.vocabulary}" đã được tạo thành công.`,
         })
-        setFormData(EMPTY_FORM)
+        setFormData({ ...EMPTY_FORM, deckId: defaultDeckId || '' })
         onSaved()
         if (editingCard) onClearEditing()
       } else {
@@ -76,9 +132,11 @@ export function AddEditTab({ editingCard, onClearEditing, onSaved }: AddEditTabP
   }
 
   const handleCancel = () => {
-    setFormData(EMPTY_FORM)
+    setFormData({ ...EMPTY_FORM, deckId: defaultDeckId || '' })
     onClearEditing()
   }
+
+  const allDecks = getAllDecks(decks)
 
   return (
     <div className="space-y-6">
@@ -89,7 +147,9 @@ export function AddEditTab({ editingCard, onClearEditing, onSaved }: AddEditTabP
             {editingCard ? 'Sửa thẻ' : 'Thêm thẻ mới'}
           </h2>
           <p className="text-sm text-muted-foreground">
-            {editingCard ? `Đang sửa: ${editingCard.vocabulary}` : 'Điền thông tin để tạo thẻ từ vựng mới'}
+            {editingCard
+              ? `Đang sửa: ${editingCard.vocabulary}`
+              : 'Điền thông tin để tạo thẻ từ vựng mới'}
           </p>
         </div>
         {editingCard && (
@@ -102,14 +162,37 @@ export function AddEditTab({ editingCard, onClearEditing, onSaved }: AddEditTabP
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Form */}
-        <Card>
+        <Card className="border-border/50">
           <CardHeader>
             <CardTitle className="text-lg">Thông tin thẻ</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Deck selector */}
+            <div className="space-y-2">
+              <Label>
+                Bộ từ <span className="text-destructive">*</span>
+              </Label>
+              <Select value={formData.deckId} onValueChange={(v) => updateField('deckId', v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn bộ từ" />
+                </SelectTrigger>
+                <SelectContent>
+                  {allDecks.map((deck) => (
+                    <SelectItem key={deck.id} value={deck.id}>
+                      {'　'.repeat(deck.depth)}
+                      {deck.depth > 0 && '└ '}
+                      {deck.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Vocabulary */}
             <div className="space-y-2">
-              <Label htmlFor="vocabulary">Từ vựng <span className="text-destructive">*</span></Label>
+              <Label htmlFor="vocabulary">
+                Từ vựng <span className="text-destructive">*</span>
+              </Label>
               <Input
                 id="vocabulary"
                 placeholder="Ví dụ: Beautiful"
@@ -120,7 +203,9 @@ export function AddEditTab({ editingCard, onClearEditing, onSaved }: AddEditTabP
 
             {/* IPA */}
             <div className="space-y-2">
-              <Label htmlFor="ipa">IPA <span className="text-destructive">*</span></Label>
+              <Label htmlFor="ipa">
+                IPA <span className="text-destructive">*</span>
+              </Label>
               <Input
                 id="ipa"
                 placeholder="Ví dụ: /ˈbjuːtɪfəl/"
@@ -131,7 +216,9 @@ export function AddEditTab({ editingCard, onClearEditing, onSaved }: AddEditTabP
 
             {/* Word Type */}
             <div className="space-y-2">
-              <Label htmlFor="wordType">Loại từ <span className="text-destructive">*</span></Label>
+              <Label htmlFor="wordType">
+                Loại từ <span className="text-destructive">*</span>
+              </Label>
               <Select value={formData.wordType} onValueChange={(v) => updateField('wordType', v)}>
                 <SelectTrigger id="wordType">
                   <SelectValue placeholder="Chọn loại từ" />
@@ -148,7 +235,9 @@ export function AddEditTab({ editingCard, onClearEditing, onSaved }: AddEditTabP
 
             {/* Meaning */}
             <div className="space-y-2">
-              <Label htmlFor="meaning">Nghĩa <span className="text-destructive">*</span></Label>
+              <Label htmlFor="meaning">
+                Nghĩa <span className="text-destructive">*</span>
+              </Label>
               <Textarea
                 id="meaning"
                 placeholder="Ví dụ: Đẹp, xinh đẹp"
