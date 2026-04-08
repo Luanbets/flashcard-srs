@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { DeckData } from './types'
 import { createDeck as createDeckFirestore, updateDeck as updateDeckFirestore, deleteDeck as deleteDeckFirestore } from '@/lib/firestore'
 import { Button } from '@/components/ui/button'
@@ -55,6 +55,7 @@ export function DeckSidebar({
   const [deleteTarget, setDeleteTarget] = useState<DeckData | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const savingRef = useRef(false)
   const { toast } = useToast()
 
   const toggleExpand = (parentId: string) => {
@@ -87,7 +88,8 @@ export function DeckSidebar({
   }
 
   const saveEdit = useCallback(async () => {
-    if (!editingDeckId || !editName.trim()) return
+    if (!editingDeckId || !editName.trim() || savingRef.current) return
+    savingRef.current = true
     setIsSaving(true)
     try {
       await updateDeckFirestore(editingDeckId, { name: editName.trim() })
@@ -96,13 +98,15 @@ export function DeckSidebar({
     } catch {
       toast({ title: 'Lỗi', description: 'Không thể cập nhật.', variant: 'destructive' })
     } finally {
+      savingRef.current = false
       setIsSaving(false)
     }
   }, [editingDeckId, editName, toast])
 
   const createDeckFn = useCallback(
     async (name: string, parentId: string | null) => {
-      if (!name.trim() || isSaving) return
+      if (!name.trim() || savingRef.current) return
+      savingRef.current = true
       setIsSaving(true)
       try {
         await createDeckFirestore({ name: name.trim(), parentId })
@@ -119,6 +123,7 @@ export function DeckSidebar({
       } catch {
         toast({ title: 'Lỗi', description: 'Không thể tạo bộ từ.', variant: 'destructive' })
       } finally {
+        savingRef.current = false
         setIsSaving(false)
       }
     },

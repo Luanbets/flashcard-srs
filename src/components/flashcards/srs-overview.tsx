@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo, useRef, useEffect } from 'react'
 import { FlashcardData, SRS_LEVELS, toDate } from './types'
 import { Flame, Clock, TrendingUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -9,29 +10,32 @@ interface SRSOverviewProps {
 }
 
 export function SRSOverview({ cards }: SRSOverviewProps) {
-  const now = new Date()
-  const nowMs = now.getTime()
+  const nowRef = useRef(Date.now())
+  useEffect(() => {
+    const interval = setInterval(() => {
+      nowRef.current = Date.now()
+    }, 60000)
+    return () => clearInterval(interval)
+  }, [])
+
   const totalCards = cards.length
 
-  // Count cards per level
-  const levelCounts = SRS_LEVELS.map((level) => ({
-    ...level,
-    count: cards.filter((c) => c.srsLevel === level.level).length,
-  }))
-
-  // Count due cards
-  const dueCards = cards.filter((c) => {
-    const nextReviewDate = toDate(c.nextReview)
-    return nextReviewDate ? nextReviewDate.getTime() <= nowMs : false
-  })
-  const dueCount = dueCards.length
-
-  // Calculate percentage for each level for the bar
-  const levelPercentages = levelCounts.map((l) =>
-    totalCards > 0 ? (l.count / totalCards) * 100 : 0
-  )
-
-  const totalReviews = cards.reduce((sum, c) => sum + c.reviewCount, 0)
+  const { levelCounts, dueCount, levelPercentages, totalReviews } = useMemo(() => {
+    const nowMs = nowRef.current
+    const counts = SRS_LEVELS.map((level) => ({
+      ...level,
+      count: cards.filter((c) => c.srsLevel === level.level).length,
+    }))
+    const due = cards.filter((c) => {
+      const nextReviewDate = toDate(c.nextReview)
+      return nextReviewDate ? nextReviewDate.getTime() <= nowMs : false
+    })
+    const pcts = counts.map((l) =>
+      totalCards > 0 ? (l.count / totalCards) * 100 : 0
+    )
+    const reviews = cards.reduce((sum, c) => sum + c.reviewCount, 0)
+    return { levelCounts: counts, dueCount: due.length, levelPercentages: pcts, totalReviews: reviews }
+  }, [cards, totalCards])
 
   return (
     <div className="space-y-3">

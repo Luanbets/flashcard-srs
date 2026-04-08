@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   FlashcardData,
   EMPTY_FORM,
@@ -62,6 +62,7 @@ export function AddEditTab({
     deckId: defaultDeckId || '',
   })
   const [isSaving, setIsSaving] = useState(false)
+  const savingRef = useRef(false)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -101,6 +102,7 @@ export function AddEditTab({
     }
 
     setIsSaving(true)
+    savingRef.current = true
     try {
       if (editingCard) {
         await updateFlashcard(editingCard.id, formData)
@@ -122,6 +124,7 @@ export function AddEditTab({
     } catch {
       toast({ title: 'Lỗi', description: 'Có lỗi xảy ra.', variant: 'destructive' })
     } finally {
+      savingRef.current = false
       setIsSaving(false)
     }
   }

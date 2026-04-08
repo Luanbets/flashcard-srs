@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { FlashcardData, getSRSLevelConfig, SRS_LEVELS, toDate } from './types'
 import { deleteFlashcard as deleteFlashcardFirestore } from '@/lib/firestore'
 import { Button } from '@/components/ui/button'
@@ -39,6 +39,7 @@ interface WordListProps {
   onRefresh: () => void
   deckId: string | null
   isLoading?: boolean
+  decksLoading?: boolean
 }
 
 export function WordList({
@@ -51,6 +52,7 @@ export function WordList({
   onRefresh,
   deckId,
   isLoading = false,
+  decksLoading = false,
 }: WordListProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [levelFilter, setLevelFilter] = useState<string>('all')
@@ -58,16 +60,24 @@ export function WordList({
   const [isDeleting, setIsDeleting] = useState(false)
   const { toast } = useToast()
 
-  const now = new Date()
+  // Stable timestamp for due card calculation (updated every 60s)
+  const nowRef = useRef(Date.now())
+  useEffect(() => {
+    const interval = setInterval(() => {
+      nowRef.current = Date.now()
+    }, 60000)
+    return () => clearInterval(interval)
+  }, [])
+
   const dueCards = useMemo(
     () => {
-      const nowMs = now.getTime()
+      const nowMs = nowRef.current
       return cards.filter((c) => {
         const nextReviewDate = toDate(c.nextReview)
         return nextReviewDate ? nextReviewDate.getTime() <= nowMs : false
       })
     },
-    [cards, now]
+    [cards]
   )
 
   const filteredCards = useMemo(() => {
@@ -177,7 +187,7 @@ export function WordList({
             {filteredCards.map((card, index) => {
               const config = getSRSLevelConfig(card.srsLevel)
               const nextReviewDate = toDate(card.nextReview)
-              const isDue = nextReviewDate ? nextReviewDate.getTime() <= now.getTime() : false
+              const isDue = nextReviewDate ? nextReviewDate.getTime() <= nowRef.current : false
               return (
                 <motion.div
                   key={card.id}
@@ -255,7 +265,7 @@ export function WordList({
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            {isLoading ? (
+            {isLoading || decksLoading ? (
               <>
                 <div className="relative h-8 w-8 mb-4">
                   <div className="absolute inset-0 rounded-full border-2 border-purple-500/20" />

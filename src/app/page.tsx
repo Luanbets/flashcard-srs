@@ -33,15 +33,10 @@ export default function Home() {
   const [studyCards, setStudyCards] = useState<FlashcardData[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [decksLoaded, setDecksLoaded] = useState(false)
+  const [cardsLoaded, setCardsLoaded] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { speak, isSpeaking } = useTTS()
   const seededRef = useRef(false)
-
-  // Safety timeout: hide loading after 3s even if Firestore is slow
-  useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 3000)
-    return () => clearTimeout(timer)
-  }, [])
 
   // Seed data on first load (non-blocking)
   useEffect(() => {
@@ -57,9 +52,10 @@ export default function Home() {
     const unsub = subscribeDecks((updatedDecks) => {
       setDecks(updatedDecks)
       setDecksLoaded(true)
+      if (cardsLoaded) setIsLoading(false)
     })
     return () => unsub()
-  }, [])
+  }, [cardsLoaded])
 
   // Subscribe to flashcards realtime - efficient per-deck queries
   useEffect(() => {
@@ -67,11 +63,12 @@ export default function Home() {
       selectedDeckId,
       (updatedCards) => {
         setCards(updatedCards)
-        setIsLoading(false)
+        setCardsLoaded(true)
+        if (decksLoaded) setIsLoading(false)
       }
     )
     return () => unsub()
-  }, [selectedDeckId])
+  }, [selectedDeckId, decksLoaded])
 
   // Handlers
   const handleEdit = (card: FlashcardData) => {
@@ -276,6 +273,7 @@ export default function Home() {
                     onRefresh={handleRefresh}
                     deckId={selectedDeckId}
                     isLoading={isLoading}
+                    decksLoading={!decksLoaded}
                   />
                 </div>
               </motion.div>
