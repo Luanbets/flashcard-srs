@@ -1,0 +1,23 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Flashcard {
+  id            String   @id @default(cuid())
+  vocabulary    String
+  ipa           String
+  wordType      String
+  meaning       String
+  example1      String?
+  example1Image String?
+  example2      String?
+  example2Image String?
+  deck          String   @default("default")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
