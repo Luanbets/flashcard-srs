@@ -38,6 +38,7 @@ interface WordListProps {
   isSpeaking: boolean
   onRefresh: () => void
   deckId: string | null
+  isLoading?: boolean
 }
 
 export function WordList({
@@ -49,6 +50,7 @@ export function WordList({
   isSpeaking,
   onRefresh,
   deckId,
+  isLoading = false,
 }: WordListProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [levelFilter, setLevelFilter] = useState<string>('all')
@@ -252,12 +254,21 @@ export function WordList({
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <BookOpen className="mb-3 h-10 w-10 text-muted-foreground/30" />
-            <p className="text-sm text-muted-foreground">
-              {searchQuery || levelFilter !== 'all'
-                ? 'Không tìm thấy thẻ nào'
-                : 'Chưa có thẻ nào'}
-            </p>
+            {isLoading ? (
+              <>
+                <div className="h-6 w-6 animate-spin rounded-full border-3 border-primary border-t-transparent mb-3" />
+                <p className="text-sm text-muted-foreground">Đang tải từ vựng...</p>
+              </>
+            ) : (
+              <>
+                <BookOpen className="mb-3 h-10 w-10 text-muted-foreground/30" />
+                <p className="text-sm text-muted-foreground">
+                  {searchQuery || levelFilter !== 'all'
+                    ? 'Không tìm thấy thẻ nào'
+                    : 'Chưa có thẻ nào'}
+                </p>
+              </>
+            )}
           </div>
         )}
       </ScrollArea>

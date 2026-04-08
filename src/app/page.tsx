@@ -36,6 +36,12 @@ export default function Home() {
   const { speak, isSpeaking } = useTTS()
   const seededRef = useRef(false)
 
+  // Safety timeout: hide loading after 3s even if Firestore is slow
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 3000)
+    return () => clearTimeout(timer)
+  }, [])
+
   // Seed data on first load
   useEffect(() => {
     if (seededRef.current) return
@@ -251,25 +257,17 @@ export default function Home() {
 
                 {/* Word List */}
                 <div className="flex-1 overflow-hidden">
-                  {isLoading ? (
-                    <div className="flex h-full items-center justify-center">
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-                        <p className="text-sm text-muted-foreground">Đang tải...</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <WordList
-                      cards={cards}
-                      onEdit={handleEdit}
-                      onDelete={() => {}}
-                      onStartStudy={handleStartStudy}
-                      onSpeak={speak}
-                      isSpeaking={isSpeaking}
-                      onRefresh={handleRefresh}
-                      deckId={selectedDeckId}
-                    />
-                  )}
+                  <WordList
+                    cards={cards}
+                    onEdit={handleEdit}
+                    onDelete={() => {}}
+                    onStartStudy={handleStartStudy}
+                    onSpeak={speak}
+                    isSpeaking={isSpeaking}
+                    onRefresh={handleRefresh}
+                    deckId={selectedDeckId}
+                    isLoading={isLoading}
+                  />
                 </div>
               </motion.div>
             )}

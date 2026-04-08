@@ -468,19 +468,126 @@ export async function reviewFlashcard(
   }
 }
 
-// ─── Realtime Subscriptions ──────────────────────────────────────
+// ─── Realtime Subscriptions (Optimized) ───────────────────────────
 
 export type DecksCallback = (decks: DeckData[]) => void
 export type FlashcardsCallback = (cards: FlashcardData[]) => void
 
+// Cache deck structure globally to avoid re-querying
+let _deckNameCache: Record<string, string> = {}
+let _deckParentCache: Record<string, string | null> = {}
+let _parentDeckIds: Set<string> = new Set()
+let _deckCacheReady = false
+
+async function ensureDeckCache(): Promise<void> {
+  if (_deckCacheReady) return
+  const snap = await getDocs(collection(db, DECKS_COL))
+  _deckNameCache = {}
+  _deckParentCache = {}
+  _parentDeckIds = new Set()
+  snap.docs.forEach((d) => {
+    const data = d.data()
+    const id = d.id
+    _deckNameCache[id] = data.name || ''
+    _deckParentCache[id] = data.parentId || null
+    if (!data.parentId) {
+      _parentDeckIds.add(id)
+    }
+  })
+  _deckCacheReady = true
+}
+
+function getChildDeckIds(parentId: string): Set<string> {
+  const ids = new Set<string>([parentId])
+  Object.entries(_deckParentCache).forEach(([id, pid]) => {
+    if (pid === parentId) {
+      ids.add(id)
+      // Also include nested children
+      const nested = getChildDeckIds(id)
+      nested.forEach(nid => ids.add(nid))
+    }
+  })
+  return ids
+}
+
+function invalidateDeckCache() {
+  _deckNameCache = {}
+  _deckParentCache = {}
+  _parentDeckIds = new Set()
+  _deckCacheReady = false
+}
+
 export async function subscribeDecks(callback: DecksCallback): Promise<() => void> {
-  // We need to build the enriched deck tree, so we combine onSnapshot for decks and flashcards
+  // Initial load
+  let initialDone = false
+
   const unsubscribeDecks = onSnapshot(
     query(collection(db, DECKS_COL), orderBy('order', 'asc')),
-    async () => {
-      // Re-fetch with full enrichment on any deck change
-      const decks = await getDecks()
-      callback(decks)
+    async (snap) => {
+      // Build deck tree directly from snapshot (no extra queries!)
+      const allDecks: DeckData[] = snap.docs.map(deckFromDoc)
+      const parents = allDecks.filter((d) => !d.parentId)
+      const children = allDecks.filter((d) => d.parentId)
+
+      // Assign children to parents
+      const childMap: Record<string, DeckData[]> = {}
+      children.forEach((c) => {
+        if (!childMap[c.parentId!]) childMap[c.parentId!] = []
+        childMap[c.parentId!].push(c)
+      })
+
+      const tree: DeckData[] = parents.map((p) => ({
+        ...p,
+        children: childMap[p.id] || [],
+      }))
+
+      // Count cards in a single query (only on initial load or deck change)
+      const allDeckIds = allDecks.map((d) => d.id)
+      const deckCardCounts: Record<string, number> = {}
+
+      if (allDeckIds.length > 0) {
+        const chunks: string[][] = []
+        for (let i = 0; i < allDeckIds.length; i += 30) {
+          chunks.push(allDeckIds.slice(i, i + 30))
+        }
+        const promises = chunks.map((chunk) =>
+          getDocs(query(collection(db, CARDS_COL), where('deckId', 'in', chunk))).then(
+            (cardsSnap) => {
+              cardsSnap.docs.forEach((docSnap) => {
+                const did = docSnap.data().deckId
+                deckCardCounts[did] = (deckCardCounts[did] || 0) + 1
+              })
+            }
+          )
+        )
+        await Promise.all(promises)
+      }
+
+      // Apply counts
+      tree.forEach((p) => {
+        const childCount = (p.children || []).reduce(
+          (sum, c) => sum + (deckCardCounts[c.id] || 0),
+          0
+        )
+        p.totalCount = (deckCardCounts[p.id] || 0) + childCount
+        ;(p.children || []).forEach((c) => {
+          c.totalCount = deckCardCounts[c.id] || 0
+        })
+      })
+
+      // Update cache
+      _deckNameCache = {}
+      _deckParentCache = {}
+      _parentDeckIds = new Set()
+      allDecks.forEach((d) => {
+        _deckNameCache[d.id] = d.name
+        _deckParentCache[d.id] = d.parentId
+        if (!d.parentId) _parentDeckIds.add(d.id)
+      })
+      _deckCacheReady = true
+
+      initialDone = true
+      callback(tree)
     }
   )
   return unsubscribeDecks
@@ -490,26 +597,40 @@ export async function subscribeFlashcards(
   deckId: string | null,
   callback: FlashcardsCallback
 ): Promise<() => void> {
-  const isParent =
-    deckId
-      ? await checkIsParentDeck(deckId)
-      : false
+  // Warm up deck cache (usually already cached from subscribeDecks)
+  await ensureDeckCache()
+
+  // Determine if selected deck is a parent (from cache - instant!)
+  const isParent = deckId ? _parentDeckIds.has(deckId) : false
+  let includeDeckIds: Set<string> | null = null
+
+  if (deckId && isParent) {
+    includeDeckIds = getChildDeckIds(deckId)
+  }
 
   const unsubscribeCards = onSnapshot(
     query(collection(db, CARDS_COL), orderBy('createdAt', 'desc')),
-    async () => {
-      const cards = await getFlashcards(deckId, isParent)
-      callback(cards)
+    (snap) => {
+      // Process cards directly from snapshot (no extra queries!)
+      const allCards = snap.docs.map((docSnap) => {
+        const d = docSnap.data()
+        return flashcardFromDoc(docSnap, _deckNameCache[d.deckId] || '')
+      })
+
+      // Filter client-side using cache (instant, no network!)
+      let filteredCards = allCards
+      if (deckId) {
+        if (includeDeckIds) {
+          filteredCards = allCards.filter((c) => includeDeckIds.has(c.deckId))
+        } else {
+          filteredCards = allCards.filter((c) => c.deckId === deckId)
+        }
+      }
+
+      callback(filteredCards)
     }
   )
   return unsubscribeCards
-}
-
-async function checkIsParentDeck(deckId: string): Promise<boolean> {
-  const childrenSnap = await getDocs(
-    query(collection(db, DECKS_COL), where('parentId', '==', deckId))
-  )
-  return !childrenSnap.empty
 }
 
 // ─── Seed Data ───────────────────────────────────────────────────
