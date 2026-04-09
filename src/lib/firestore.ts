@@ -168,17 +168,34 @@ function getDeckName(deckId: string): string {
   return _deckNameCache[deckId] || ''
 }
 
+// ─── Timeout Helper ─────────────────────────────────────────────
+
+function withTimeout<T>(promise: Promise<T>, ms: number, operation: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${operation} timeout sau ${ms / 1000}s`)), ms)
+    ),
+  ])
+}
+
+const WRITE_TIMEOUT = 10000 // 10 giây
+
 // ─── Deck CRUD ───────────────────────────────────────────────────
 
 export async function createDeck(data: { name: string; parentId: string | null }): Promise<string> {
   const now = Timestamp.now()
-  const docRef = await addDoc(collection(db, DECKS_COL), {
-    name: data.name.trim(),
-    parentId: data.parentId || null,
-    order: 0,
-    createdAt: now,
-    updatedAt: now,
-  })
+  const docRef = await withTimeout(
+    addDoc(collection(db, DECKS_COL), {
+      name: data.name.trim(),
+      parentId: data.parentId || null,
+      order: 0,
+      createdAt: now,
+      updatedAt: now,
+    }),
+    WRITE_TIMEOUT,
+    'Tạo deck'
+  )
   return docRef.id
 }
 
@@ -188,7 +205,7 @@ export async function updateDeck(id: string, data: Partial<{ name: string; paren
   if (data.name !== undefined) updateData.name = data.name.trim()
   if (data.parentId !== undefined) updateData.parentId = data.parentId || null
   if (data.order !== undefined) updateData.order = data.order
-  await updateDoc(ref, updateData)
+  await withTimeout(updateDoc(ref, updateData), WRITE_TIMEOUT, 'Cập nhật deck')
 }
 
 export async function deleteDeck(id: string) {
@@ -220,25 +237,29 @@ async function deleteDeckRecursive(deckId: string) {
 
 export async function createFlashcard(data: FlashcardFormData): Promise<string> {
   const now = Timestamp.now()
-  const docRef = await addDoc(collection(db, CARDS_COL), {
-    vocabulary: data.vocabulary,
-    ipa: data.ipa,
-    wordType: data.wordType,
-    meaning: data.meaning,
-    example1: data.example1 || null,
-    example1Image: data.example1Image || null,
-    example2: data.example2 || null,
-    example2Image: data.example2Image || null,
-    srsLevel: 0,
-    easeFactor: 2.5,
-    interval: 0,
-    nextReview: now,
-    reviewCount: 0,
-    lastReview: null,
-    deckId: data.deckId,
-    createdAt: now,
-    updatedAt: now,
-  })
+  const docRef = await withTimeout(
+    addDoc(collection(db, CARDS_COL), {
+      vocabulary: data.vocabulary,
+      ipa: data.ipa,
+      wordType: data.wordType,
+      meaning: data.meaning,
+      example1: data.example1 || null,
+      example1Image: data.example1Image || null,
+      example2: data.example2 || null,
+      example2Image: data.example2Image || null,
+      srsLevel: 0,
+      easeFactor: 2.5,
+      interval: 0,
+      nextReview: now,
+      reviewCount: 0,
+      lastReview: null,
+      deckId: data.deckId,
+      createdAt: now,
+      updatedAt: now,
+    }),
+    WRITE_TIMEOUT,
+    'Tạo flashcard'
+  )
   return docRef.id
 }
 
@@ -254,11 +275,11 @@ export async function updateFlashcard(id: string, data: Partial<FlashcardFormDat
   if (data.example2 !== undefined) updateData.example2 = data.example2 || null
   if (data.example2Image !== undefined) updateData.example2Image = data.example2Image || null
   if (data.deckId !== undefined) updateData.deckId = data.deckId
-  await updateDoc(ref, updateData)
+  await withTimeout(updateDoc(ref, updateData), WRITE_TIMEOUT, 'Cập nhật flashcard')
 }
 
 export async function deleteFlashcard(id: string) {
-  await deleteDoc(doc(db, CARDS_COL, id))
+  await withTimeout(deleteDoc(doc(db, CARDS_COL, id)), WRITE_TIMEOUT, 'Xóa flashcard')
 }
 
 // ─── SM-2 Algorithm ──────────────────────────────────────────────

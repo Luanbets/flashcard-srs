@@ -81,10 +81,10 @@ export function FlashcardFlipCard({
           className="absolute inset-0 w-full rounded-3xl p-[1px]"
           style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
         >
-          <div className="w-full rounded-3xl glass-strong p-8 sm:p-10">
-            <div className="flex min-h-[280px] sm:min-h-[320px] flex-col gap-4">
+          <div className="w-full rounded-3xl glass-strong p-6 sm:p-8">
+            <div className="flex max-h-[340px] sm:max-h-[380px] flex-col gap-3 overflow-y-auto custom-scrollbar">
               {/* Header */}
-              <div className="border-b border-white/10 pb-3">
+              <div className="border-b border-white/10 pb-3 shrink-0">
                 <h3 className="text-lg font-semibold text-foreground/90">
                   {card.vocabulary}{' '}
                   <Badge variant="secondary" className="ml-1 text-xs bg-white/5 border-white/10 text-muted-foreground">
@@ -94,13 +94,13 @@ export function FlashcardFlipCard({
               </div>
 
               {/* Meaning */}
-              <div>
+              <div className="shrink-0">
                 <p className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wide">Nghĩa</p>
                 <p className="mt-1 text-base text-foreground/85">{card.meaning}</p>
               </div>
 
               {/* Examples with TTS */}
-              <div className="mt-1 flex-1 space-y-3">
+              <div className="flex-1 space-y-3 min-h-0">
                 {card.example1 && (
                   <div className="rounded-xl bg-white/3 border border-white/5 p-3">
                     <div className="flex items-center justify-between">
@@ -123,7 +123,7 @@ export function FlashcardFlipCard({
                           alt="Example 1"
                           width={400}
                           height={150}
-                          className="h-auto w-full rounded-lg object-cover"
+                          className="h-auto max-h-[120px] w-full rounded-lg object-cover"
                           unoptimized
                         />
                       </div>
@@ -152,7 +152,7 @@ export function FlashcardFlipCard({
                           alt="Example 2"
                           width={400}
                           height={150}
-                          className="h-auto w-full rounded-lg object-cover"
+                          className="h-auto max-h-[120px] w-full rounded-lg object-cover"
                           unoptimized
                         />
                       </div>

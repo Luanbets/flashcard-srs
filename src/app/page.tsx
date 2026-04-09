@@ -52,10 +52,9 @@ export default function Home() {
     const unsub = subscribeDecks((updatedDecks) => {
       setDecks(updatedDecks)
       setDecksLoaded(true)
-      if (cardsLoaded) setIsLoading(false)
     })
     return () => unsub()
-  }, [cardsLoaded])
+  }, [])
 
   // Subscribe to flashcards realtime - efficient per-deck queries
   useEffect(() => {
@@ -64,11 +63,17 @@ export default function Home() {
       (updatedCards) => {
         setCards(updatedCards)
         setCardsLoaded(true)
-        if (decksLoaded) setIsLoading(false)
       }
     )
     return () => unsub()
-  }, [selectedDeckId, decksLoaded])
+  }, [selectedDeckId])
+
+  // Hide loading once both decks and cards have loaded at least once
+  useEffect(() => {
+    if (decksLoaded && cardsLoaded) {
+      setIsLoading(false)
+    }
+  }, [decksLoaded, cardsLoaded])
 
   // Handlers
   const handleEdit = (card: FlashcardData) => {
